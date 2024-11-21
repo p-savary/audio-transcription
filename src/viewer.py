@@ -14,7 +14,6 @@ def create_viewer(data, file_path, encode_base64, combine_speaker, root):
         if "speaker" not in segment:
             segment["speaker"] = "unknown"
     file_name = str(os.path.basename(file_path))
-    # file_name = file_name[file_name.find('_') + 1:]
 
     html = header(root)
     html += navbar(root)
@@ -85,7 +84,6 @@ def speaker_information(data):
     for idx, speaker in enumerate(speakers):
         if speaker is not "unknown":
             content += f'\t\t\t\t\t<span contenteditable="true" class="form-control" id="IN_SPEAKER_{str(idx).zfill(2)}" style="margin-top:4px;">Person {speaker[-2:]}</span>\n'
-    # <label for="{speaker}"></label>
     content += "\t\t\t\t<br><br><br><br><br></div>\n"
     content += "\t\t\t\t</div>\n"
     content += "\t\t\t</div>\n"
