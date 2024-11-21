@@ -1,9 +1,11 @@
 import os
 import datetime
-import base64
+from dotenv import load_dotenv
 
 
-ADDITIONAL_SPEAKERS = 4
+load_dotenv()
+
+ADDITIONAL_SPEAKERS = int(os.getenv("ADDITIONAL_SPEAKERS"))
 
 
 # function to generate the viewer html-file.
