@@ -1,21 +1,20 @@
 import os
 import datetime
-from dotenv import load_dotenv
+import base64
 
 
-load_dotenv()
-
-ADDITIONAL_SPEAKERS = int(os.getenv("ADDITIONAL_SPEAKERS"))
+ADDITIONAL_SPEAKERS = 4
 
 
-# Function to generate the viewer html-file.
-# Input data is the segments of the output of whisperx.assign_word_speakers: whisperx.assign_word_speakers(diarize_df, result2)['segments']
-# File_path is the path to the audio/video file.
+# function to generate the viewer html-file.
+# input data is the segments of the output of whisperx.assign_word_speakers: whisperx.assign_word_speakers(diarize_df, result2)['segments']
+# file_path is the path to the audio/video file
 def create_viewer(data, file_path, encode_base64, combine_speaker, root):
     for segment in data:
         if "speaker" not in segment:
             segment["speaker"] = "unknown"
     file_name = str(os.path.basename(file_path))
+    # file_name = file_name[file_name.find('_') + 1:]
 
     html = header(root)
     html += navbar(root)
@@ -76,15 +75,7 @@ def meta_data(file_name, encode_base64):
 
 def speaker_information(data):
     content = '\t\t\t\t<div style="margin-top:10px;" class="viewer-hidden">\n'
-    speakers = sorted(
-        set(
-            [
-                segment["speaker"]
-                for segment in data
-                if segment["speaker"] is not "unknown"
-            ]
-        )
-    )
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
 
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
@@ -94,7 +85,7 @@ def speaker_information(data):
     for idx, speaker in enumerate(speakers):
         if speaker is not "unknown":
             content += f'\t\t\t\t\t<span contenteditable="true" class="form-control" id="IN_SPEAKER_{str(idx).zfill(2)}" style="margin-top:4px;">Person {speaker[-2:]}</span>\n'
-
+    # <label for="{speaker}"></label>
     content += "\t\t\t\t<br><br><br><br><br></div>\n"
     content += "\t\t\t\t</div>\n"
     content += "\t\t\t</div>\n"
@@ -104,9 +95,13 @@ def speaker_information(data):
 
 def buttons():
     content = '\t\t\t\t<div style="margin-top:10px;" class="viewer-hidden">\n'
-    content += '\t\t\t\t\t<a href ="#" id="viewer-link" onClick="viewerClick()" class="btn btn-primary">Viewer erstellen</a>\n'
+    content += (
+        '\t\t\t\t\t<a href ="#" id="viewer-link" onClick="viewerClick()" class="btn btn-primary">Viewer erstellen</a>\n'
+    )
     content += '\t\t\t\t\t<a href ="#" id="text-link" onClick="textClick()" class="btn btn-primary">Textdatei exportieren</a>\n'
-    content += '\t\t\t\t\t<a href ="#" id="download-link" onClick="downloadClick()" class="btn btn-primary">Speichern</a>\n'
+    content += (
+        '\t\t\t\t\t<a href ="#" id="download-link" onClick="downloadClick()" class="btn btn-primary">Speichern</a>\n'
+    )
     content += '\t\t\t\t\t<br><span>Verzögerung: </span><span contenteditable="true" id="delay" class="border rounded"></span>\n'
     content += '\t\t\t\t\t<input type="checkbox" id="ignore_lang" value="ignore_lang" style="margin-left: 5px" onclick="changeCheckbox(this)"/>\n'
     content += '\t\t\t\t\t<label for="ignore_lang">Fremdsprachen beim Exportieren entfernen</label>\n'
@@ -115,22 +110,14 @@ def buttons():
 
 
 def segment_buttons():
-    return "<button style='float: right;' class='btn btn-danger btn-sm' onclick='removeRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-trash' viewBox='0 0 16 16'><path d='M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z'/><path d='M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z'/></svg></button><button style='float: right;' class='btn btn-primary btn-sm' onclick='addRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-plus' viewBox='0 0 16 16'><path d='M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4'/></svg></button>"
+    return "<button style='float: right;' class='btn btn-danger btn-sm' onclick='removeRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-trash' viewBox='0 0 16 16'><path d='M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z'/><path d='M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z'/></svg></button><button style='float: right;' class='btn btn-primary btn-sm' onclick='addRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-plus' viewBox='0 0 16 16'><path d='M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4'/></svg></button><button style=\"float: right; margin-right: 20px\" class=\"btn btn-warning btn-sm\" onclick=\"tagFunction(this)\"><svg xmlns=\"http://www.w3.org/2000/svg\" height=\"16px\" viewBox=\"0 -960 960 960\" width=\"16px\" fill=\"#5f6368\"><path d=\"m264-192 30-120H144l18-72h150l42-168H192l18-72h162l36-144h72l-36 144h144l36-144h72l-36 144h156l-18 72H642l-42 168h168l-18 72H582l-30 120h-72l30-120H366l-30 120h-72Zm120-192h144l42-168H426l-42 168Z\"/></svg></button>"
 
 
 def transcript(data, combine_speaker):
     content = '\t\t<div class="col-md-6" style="width: 60%; max-width: 90ch; z-index: 1; margin-left: auto; margin-right: auto">\n'
     content += '\t\t\t<div class="wrapper" style="margin: 0.5rem auto 0; max-width: 80ch;" id="editor">\n'
 
-    speakers = sorted(
-        set(
-            [
-                segment["speaker"]
-                for segment in data
-                if segment["speaker"] is not "unknown"
-            ]
-        )
-    )
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
         speakers.append(str(n_speakers + i).zfill(2))
@@ -139,10 +126,7 @@ def transcript(data, combine_speaker):
     table_elements = ""
     last_speaker = None
     for segment in data:
-        if (
-            segment["speaker"] not in speaker_order
-            and segment["speaker"] is not "unknown"
-        ):
+        if segment["speaker"] not in speaker_order and segment["speaker"] is not "unknown":
             speaker_order.append(segment["speaker"])
 
     for i in range(ADDITIONAL_SPEAKERS):
@@ -155,9 +139,7 @@ def transcript(data, combine_speaker):
             table_elements += "\t\t\t</div>\n"
         table_elements += "\t\t\t<div>\n"
         if last_speaker is None or not segment["speaker"][-1] == last_speaker:
-            table_elements += (
-                '\t\t\t\t\t<div style="display: block; margin-bottom: 0.5rem;">\n'
-            )
+            table_elements += '\t\t\t\t\t<div style="display: block; margin-bottom: 0.5rem;">\n'
             table_elements += "\t\t\t\t\t"
             table_elements += f'<select onchange="selectChange(this)">\n'
             speaker_idx = speaker_order.index(segment["speaker"])
@@ -205,15 +187,7 @@ def transcript(data, combine_speaker):
 
 
 def javascript(data, file_path, encode_base64, file_name):
-    speakers = sorted(
-        set(
-            [
-                segment["speaker"]
-                for segment in data
-                if segment["speaker"] is not "unknown"
-            ]
-        )
-    )
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
         speakers.append(str(n_speakers + i).zfill(2))
@@ -227,15 +201,7 @@ def javascript(data, file_path, encode_base64, file_name):
         speakers_array = speakers_array[:-2] + ")"
     else:
         speakers_array += ")"
-    number_of_speakers = len(
-        set(
-            [
-                segment["speaker"]
-                for segment in data
-                if segment["speaker"] is not "unknown"
-            ]
-        )
-    )
+    number_of_speakers = len(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
     content = """<script language="javascript">\n"""
     content += f'var fileName = "{file_name.split(".")[0]}"\n'
     content += """var source = Array(null, null, null, null, null)
@@ -525,6 +491,16 @@ function highlightFunction() {
       }
       i++;
     }
+}
+
+function tagFunction(button) {
+	var element = button.parentElement
+	if (element.style.backgroundColor == "rgb(255, 169, 8)") {
+		element.style.backgroundColor = "white";
+	} else {
+		element.style.backgroundColor = "rgb(255, 169, 8)";
+	}
+	
 }
 
 function insertAfter(referenceNode, newNode) {
