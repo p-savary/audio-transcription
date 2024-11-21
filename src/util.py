@@ -21,6 +21,9 @@ def get_length(filename):
 
 def time_estimate(filename, online=True):
     try:
+        # For now, we don't predict the wait time for zipped files in the queue.
+        if filename[-4:] == ".zip":
+            return 1, 1
         run_time = get_length(filename)
         if online:
             return run_time / 10, run_time

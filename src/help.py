@@ -20,7 +20,10 @@ def help():
             "w-full no-wrap"
         ).style("width: min(80vw, 800px)"):
             ui.markdown(
-                'Du kannst eine oder mehrere Dateien zum Transkribieren hochladen. Drücke dazu auf den "+"-Knopf oder ziehe die Dateien in den Upload-Bereich. Das Transkriptionsmodell (Whisper) von Transcribo kann die meisten gängigen Video- und Audio-Dateiformate verarbeiten. Eine Liste aller unterstützten Formate findest du hier: [ffmpeg.org](https://www.ffmpeg.org/general.html#Supported-File-Formats_002c-Codecs-or-Features)'
+                '''Du kannst eine oder mehrere Dateien zum Transkribieren hochladen. Drücke dazu auf den "+"-Knopf oder ziehe die Dateien in den Upload-Bereich. Das Transkriptionsmodell (Whisper) von Transcribo kann die meisten gängigen Video- und Audio-Dateiformate verarbeiten. Eine Liste aller unterstützten Formate findest du hier: [ffmpeg.org](https://www.ffmpeg.org/general.html#Supported-File-Formats_002c-Codecs-or-Features)
+                
+Beim Hochladen einer ZIP-Datei werden die Audio-Spuren der darin enthaltenen Dateien kombiniert.
+                '''
             )
             ui.image(ROOT + "help/upload.png").style("width: min(40vw, 400px)")
         with ui.expansion("Editor öffnen und speichern", icon="open_in_new").classes(

@@ -560,7 +560,7 @@ async def main_page():
                                 max_file_size=12_000_000_000,
                                 max_files=100,
                             )
-                            .props('accept="video/*, audio/*"')
+                            .props('accept="video/*, audio/*, .zip"')
                             .tooltip("Dateien auswählen")
                             .classes("w-full")
                             .style("width: 100%;")
