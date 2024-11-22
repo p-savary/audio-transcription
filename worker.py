@@ -55,7 +55,7 @@ def oldest_file(folder):
     return [m for _, m in sorted(zip(times, matches))]
 
 
-def transcribe_file(file_name, multi_mode=False):
+def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
     data = None
     estimated_time = 0
 
@@ -135,7 +135,16 @@ def transcribe_file(file_name, multi_mode=False):
         if isfile(ROOT + "data/in/" + user_id + "/hotwords.txt"):
             with open(ROOT + "data/in/" + user_id + "/hotwords.txt", "r") as h:
                 hotwords = h.read().split("\n")
-        data = transcribe(file_name_out, model, diarize_model, DEVICE, None, add_language=True, hotwords=hotwords)
+        data = transcribe(
+            file_name_out,
+            model,
+            diarize_model,
+            DEVICE,
+            None,
+            add_language=True,
+            hotwords=hotwords,
+            multi_mode_track=multi_mode_track,
+        )
     except Exception as e:
         report_error(file_name, file_name_error, user_id, "Transkription fehlgeschlagen")
         print(e)
@@ -224,9 +233,9 @@ if __name__ == "__main__":
                         with open(progress_file_name, "w") as f:
                             f.write("")
 
-                        for filename in fnmatch.filter(filenames, "*.*"):
+                        for track, filename in enumerate(fnmatch.filter(filenames, "*.*")):
                             file_parts.append(' -i "' + str(os.path.join(root, filename)) + '"')
-                            data_part, _, _ = transcribe_file(os.path.join(root, filename), multi_mode)
+                            data_part, _, _ = transcribe_file(os.path.join(root, filename), multi_mode, track)
                             data_parts.append(data_part)
 
                     earliest_index = 0

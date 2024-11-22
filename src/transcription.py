@@ -51,6 +51,7 @@ def transcribe(
     add_language=False,
     hotwords=[],
     batch_size=4,
+    multi_mode_track=None,
 ):
     torch.cuda.empty_cache()
 
@@ -66,9 +67,7 @@ def transcribe(
     print(str(time.time() - start))
 
     # Align whisper output.
-    model_a, metadata = whisperx.load_align_model(
-        language_code=result1["language"], device=device
-    )
+    model_a, metadata = whisperx.load_align_model(language_code=result1["language"], device=device)
     result2 = whisperx.align(
         result1["segments"],
         model_a,
@@ -92,14 +91,19 @@ def transcribe(
         "sample_rate": SAMPLE_RATE,
     }
 
-    segments = diarize_model(audio_data, num_speakers=num_speaker)
-    diarize_df = pd.DataFrame(
-        segments.itertracks(yield_label=True), columns=["segment", "label", "speaker"]
-    )
-    diarize_df["start"] = diarize_df["segment"].apply(lambda x: x.start)
-    diarize_df["end"] = diarize_df["segment"].apply(lambda x: x.end)
+    if multi_mode_track is None:
+        segments = diarize_model(audio_data, num_speakers=num_speaker)
 
-    result3 = whisperx.assign_word_speakers(diarize_df, result2)
+        diarize_df = pd.DataFrame(segments.itertracks(yield_label=True), columns=["segment", "label", "speaker"])
+        diarize_df["start"] = diarize_df["segment"].apply(lambda x: x.start)
+        diarize_df["end"] = diarize_df["segment"].apply(lambda x: x.end)
+        result3 = whisperx.assign_word_speakers(diarize_df, result2)
+    else:
+        for segment in result2["segments"]:
+            segment["speaker"] = "SPEAKER_" + str(multi_mode_track).zfill(2)
+        result3 = result2
+
+    print(result3["segments"])
 
     torch.cuda.empty_cache()
 
