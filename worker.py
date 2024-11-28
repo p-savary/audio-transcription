@@ -89,48 +89,62 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
         time.sleep(2)
         estimated_time, run_time = time_estimate(file_name, ONLINE)
         if run_time == -1:
-            report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
+            report_error(
+                file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
+            )
             return data, estimated_time, progress_file_name
     except Exception as e:
         logger.exception("Error estimating run time")
-        report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
+        report_error(
+            file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
+        )
         return data, estimated_time, progress_file_name
 
     if not multi_mode:
         worker_user_dir = join(ROOT, "data", "worker", user_id)
         os.makedirs(worker_user_dir, exist_ok=True)
         progress_file_name = join(
-            worker_user_dir,
-            f"{estimated_time}_{int(time.time())}_{file}"
+            worker_user_dir, f"{estimated_time}_{int(time.time())}_{file}"
         )
         try:
             with open(progress_file_name, "w") as f:
                 f.write("")
         except OSError as e:
-            logger.error(f"Could not create progress file: {progress_file_name}. Error: {e}")
+            logger.error(
+                f"Could not create progress file: {progress_file_name}. Error: {e}"
+            )
 
     # Check if file has a valid audio stream
     try:
         if not ffmpeg.probe(file_name, select_streams="a")["streams"]:
-            report_error(file_name, file_name_error, user_id, "Die Tonspur der Datei konnte nicht gelesen werden")
+            report_error(
+                file_name,
+                file_name_error,
+                user_id,
+                "Die Tonspur der Datei konnte nicht gelesen werden",
+            )
             return data, estimated_time, progress_file_name
     except ffmpeg.Error as e:
         logger.exception("ffmpeg error during probing")
-        report_error(file_name, file_name_error, user_id, "Die Tonspur der Datei konnte nicht gelesen werden")
+        report_error(
+            file_name,
+            file_name_error,
+            user_id,
+            "Die Tonspur der Datei konnte nicht gelesen werden",
+        )
         return data, estimated_time, progress_file_name
 
     # Process audio
     if not multi_mode:
         # Convert and filter audio
-        ffmpeg_cmd = (
-            ffmpeg
-            .input(file_name)
-            .filter_("af", "lowpass=3000,highpass=200")
-            .output(file_name_out, vcodec="copy", acodec="aac", y=None)
+        exit_status = os.system(
+            f'ffmpeg -y -i "{file_name}" -filter:v scale=320:-2 -af "lowpass=3000,highpass=200" "{file_name_out}"'
         )
-        try:
-            ffmpeg_cmd.run()
-        except ffmpeg.Error as e:
+        if exit_status == 256:
+            exit_status = os.system(
+                f'ffmpeg -y -i "{file_name}" -c:v copy -af "lowpass=3000,highpass=200" "{file_name_out}"'
+            )
+        if not exit_status == 0:
             logger.exception("ffmpeg error during audio processing")
             file_name_out = file_name  # Fallback to original file
 
@@ -158,7 +172,9 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
         )
     except Exception as e:
         logger.exception("Transcription failed")
-        report_error(file_name, file_name_error, user_id, "Transkription fehlgeschlagen")
+        report_error(
+            file_name, file_name_error, user_id, "Transkription fehlgeschlagen"
+        )
 
     return data, estimated_time, progress_file_name
 
@@ -182,8 +198,7 @@ if __name__ == "__main__":
 
     model.model.get_prompt = types.MethodType(get_prompt, model.model)
     diarize_model = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization",
-        use_auth_token=os.getenv("HF_AUTH_TOKEN")
+        "pyannote/speaker-diarization", use_auth_token=os.getenv("HF_AUTH_TOKEN")
     ).to(torch.device(DEVICE))
 
     # Create necessary directories
@@ -243,15 +258,20 @@ if __name__ == "__main__":
 
                     # Collect files from zip
                     for root, _, filenames in os.walk(zip_extract_dir):
-                        audio_files = [fn for fn in filenames if fnmatch.fnmatch(fn, "*.*")]
+                        audio_files = [
+                            fn for fn in filenames if fnmatch.fnmatch(fn, "*.*")
+                        ]
                         for filename in audio_files:
                             file_path = join(root, filename)
                             est_time_part, _ = time_estimate(file_path, ONLINE)
                             estimated_time += est_time_part
 
                     progress_file_name = join(
-                        ROOT, "data", "worker", user_id,
-                        f"{estimated_time}_{int(time.time())}_{file}"
+                        ROOT,
+                        "data",
+                        "worker",
+                        user_id,
+                        f"{estimated_time}_{int(time.time())}_{file}",
                     )
                     with open(progress_file_name, "w") as f:
                         f.write("")
@@ -260,7 +280,9 @@ if __name__ == "__main__":
                     for track, filename in enumerate(audio_files):
                         file_path = join(root, filename)
                         file_parts.append(f'-i "{file_path}"')
-                        data_part, _, _ = transcribe_file(file_path, multi_mode=True, multi_mode_track=track)
+                        data_part, _, _ = transcribe_file(
+                            file_path, multi_mode=True, multi_mode_track=track
+                        )
                         data_parts.append(data_part)
 
                     # Merge data
@@ -268,7 +290,7 @@ if __name__ == "__main__":
                         earliest = min(
                             [(i, dp[0]) for i, dp in enumerate(data_parts) if dp],
                             key=lambda x: x[1]["start"],
-                            default=(None, None)
+                            default=(None, None),
                         )
                         if earliest[0] is None:
                             break
@@ -283,23 +305,26 @@ if __name__ == "__main__":
 
                     # Process merged audio
                     file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
-                    ffmpeg_cmd = (
-                        ffmpeg
-                        .input(output_audio)
-                        .filter_("af", "lowpass=3000,highpass=200")
-                        .output(file_name_out, vcodec="copy", acodec="aac", y=None)
+                    exit_status = os.system(
+                        f'ffmpeg -y -i "{output_audio}" -filter:v scale=320:-2 -af "lowpass=3000,highpass=200" "{file_name_out}"'
                     )
-                    try:
-                        ffmpeg_cmd.run()
-                    except ffmpeg.Error as e:
-                        logger.exception("ffmpeg error during audio merging")
-                        shutil.rmtree(zip_extract_dir, ignore_errors=True)
-                        continue
+                    if exit_status == 256:
+                        exit_status = os.system(
+                            f'ffmpeg -y -i "{output_audio}" -c:v copy -af "lowpass=3000,highpass=200" "{file_name_out}"'
+                        )
+                    if not exit_status == 0:
+                        logger.exception("ffmpeg error during audio processing")
+                        file_name_out = output_audio  # Fallback to original fileue)
 
                     shutil.rmtree(zip_extract_dir, ignore_errors=True)
                 except Exception as e:
                     logger.exception("Transcription failed for zip file")
-                    report_error(file_name, join(ROOT, "data", "error", user_id, file), user_id, "Transkription fehlgeschlagen")
+                    report_error(
+                        file_name,
+                        join(ROOT, "data", "error", user_id, file),
+                        user_id,
+                        "Transkription fehlgeschlagen",
+                    )
                     continue
             else:
                 # Single file transcription
@@ -310,6 +335,8 @@ if __name__ == "__main__":
 
             # Generate outputs
             try:
+                file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
+
                 srt = create_srt(data)
                 viewer = create_viewer(data, file_name_out, True, False, ROOT)
 
@@ -322,7 +349,12 @@ if __name__ == "__main__":
                 logger.info(f"Estimated Time: {estimated_time}")
             except Exception as e:
                 logger.exception("Error creating editor")
-                report_error(file_name, join(ROOT, "data", "error", user_id, file), user_id, "Fehler beim Erstellen des Editors")
+                report_error(
+                    file_name,
+                    join(ROOT, "data", "error", user_id, file),
+                    user_id,
+                    "Fehler beim Erstellen des Editors",
+                )
 
             if progress_file_name and os.path.exists(progress_file_name):
                 os.remove(progress_file_name)
