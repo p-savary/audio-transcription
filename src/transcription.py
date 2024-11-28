@@ -103,8 +103,6 @@ def transcribe(
             segment["speaker"] = "SPEAKER_" + str(multi_mode_track).zfill(2)
         result3 = result2
 
-    print(result3["segments"])
-
     torch.cuda.empty_cache()
 
     # Text cleanup.
