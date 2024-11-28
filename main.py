@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 from nicegui import ui, events, app
 
 from src.util import time_estimate
-from src.help import help as help_page  # Renamed to avoid conflict with built-in help function
+from src.help import (
+    help as help_page,
+)  # Renamed to avoid conflict with built-in help function
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +30,7 @@ if WINDOWS:
     os.environ["PATH"] += os.pathsep + "ffmpeg/bin"
     os.environ["PATH"] += os.pathsep + "ffmpeg"
 
+BACKSLASHCHAR = "\\"
 user_storage = {}
 
 
@@ -41,7 +44,13 @@ def read_files(user_id):
     if os.path.exists(in_path):
         for f in listdir(in_path):
             if isfile(join(in_path, f)) and f != "hotwords.txt":
-                file_status = [f, "Datei in Warteschlange. Geschätzte Wartezeit: ", 0.0, 0, os.path.getmtime(join(in_path, f))]
+                file_status = [
+                    f,
+                    "Datei in Warteschlange. Geschätzte Wartezeit: ",
+                    0.0,
+                    0,
+                    os.path.getmtime(join(in_path, f)),
+                ]
                 if isfile(join(out_path, f + ".html")):
                     file_status[1] = "Datei transkribiert"
                     file_status[2] = 100.0
@@ -57,15 +66,25 @@ def read_files(user_id):
         files_in_queue = []
         for u in user_storage:
             for f in user_storage[u].get("file_list", []):
-                if "updates" in user_storage[u] and user_storage[u]["updates"][0] == f[0]:
+                if (
+                    "updates" in user_storage[u]
+                    and len(user_storage[u]["updates"]) > 0
+                    and user_storage[u]["updates"][0] == f[0]
+                ):
                     f = user_storage[u]["updates"]
                 if f[2] < 100.0:
                     files_in_queue.append(f)
 
         for file_status in user_storage[user_id]["file_list"]:
-            estimated_wait_time = sum(f[3] for f in files_in_queue if f[4] < file_status[4])
+            estimated_wait_time = sum(
+                f[3] for f in files_in_queue if f[4] < file_status[4]
+            )
             if file_status[2] < 100.0:
-                wait_time_str = str(datetime.timedelta(seconds=round(estimated_wait_time + file_status[3])))
+                wait_time_str = str(
+                    datetime.timedelta(
+                        seconds=round(estimated_wait_time + file_status[3])
+                    )
+                )
                 file_status[1] += wait_time_str
 
     if os.path.exists(error_path):
@@ -135,10 +154,14 @@ async def handle_upload(e: events.UploadEventArguments, user_id):
 
 
 def handle_reject(e: events.GenericEventArguments):
-    ui.notify("Ungültige Datei. Es können nur Audio/Video-Dateien unter 12GB transkribiert werden.")
+    ui.notify(
+        "Ungültige Datei. Es können nur Audio/Video-Dateien unter 12GB transkribiert werden."
+    )
 
 
-def handle_added(e: events.GenericEventArguments, user_id, upload_element, refresh_file_view):
+def handle_added(
+    e: events.GenericEventArguments, user_id, upload_element, refresh_file_view
+):
     """After a file was added, refresh the GUI."""
     upload_element.run_method("removeUploadedFiles")
     refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=False)
@@ -240,7 +263,9 @@ async def download_all(user_id):
         for file_status in user_storage[user_id]["file_list"]:
             if file_status[2] == 100.0:
                 prepare_download(file_status[0], user_id)
-                final_html = join(ROOT, "data", "out", user_id, file_status[0] + ".htmlfinal")
+                final_html = join(
+                    ROOT, "data", "out", user_id, file_status[0] + ".htmlfinal"
+                )
                 myzip.write(final_html, arcname=file_status[0] + ".html")
     ui.download(zip_file_path)
 
@@ -276,7 +301,9 @@ def listen(user_id, refresh_file_view):
                 start = float(parts[1])
                 file_name = "_".join(parts[2:])
                 progress = min(0.975, (time.time() - start) / estimated_time)
-                estimated_time_left = round(max(1, estimated_time - (time.time() - start)))
+                estimated_time_left = round(
+                    max(1, estimated_time - (time.time() - start))
+                )
 
                 in_file = join(ROOT, "data", "in", user_id, file_name)
                 if os.path.exists(in_file):
@@ -305,7 +332,9 @@ def listen(user_id, refresh_file_view):
             user_storage[user_id]["file_in_progress"] = None
             refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=True)
         else:
-            refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=False)
+            refresh_file_view(
+                user_id=user_id, refresh_queue=True, refresh_results=False
+            )
 
 
 def update_hotwords(user_id):
@@ -316,6 +345,7 @@ def update_hotwords(user_id):
 @ui.page("/editor")
 async def editor():
     """Prepare and open the editor for online editing."""
+
     async def handle_save(full_file_name):
         content = ""
         for i in range(100):
@@ -386,6 +416,7 @@ return content.slice({i * 500_000}, {(i + 1) * 500_000});
 @ui.page("/")
 async def main_page():
     """Main page of the application."""
+
     def refresh_file_view(user_id, refresh_queue, refresh_results):
         num_errors = len(user_storage[user_id]["known_errors"])
         read_files(user_id)
@@ -396,34 +427,56 @@ async def main_page():
 
     @ui.refreshable
     def display_queue(user_id):
-        for file_status in sorted(user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])):
-            if user_storage[user_id].get("updates") and user_storage[user_id]["updates"][0] == file_status[0]:
+        for file_status in sorted(
+            user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])
+        ):
+            if (
+                user_storage[user_id].get("updates")
+                and user_storage[user_id]["updates"][0] == file_status[0]
+            ):
                 file_status = user_storage[user_id]["updates"]
             if 0 <= file_status[2] < 100.0:
-                ui.markdown(f"<b>{file_status[0].replace('_', '\\_')}:</b> {file_status[1]}")
-                ui.linear_progress(value=file_status[2], show_value=False, size="10px").props("instant-feedback")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}"
+                )
+                ui.linear_progress(
+                    value=file_status[2] / 100, show_value=False, size="10px"
+                ).props("instant-feedback")
                 ui.separator()
 
     @ui.refreshable
     def display_results(user_id):
         any_file_ready = False
-        for file_status in sorted(user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])):
-            if user_storage[user_id].get("updates") and user_storage[user_id]["updates"][0] == file_status[0]:
+        for file_status in sorted(
+            user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])
+        ):
+            if (
+                user_storage[user_id].get("updates")
+                and user_storage[user_id]["updates"][0] == file_status[0]
+            ):
                 file_status = user_storage[user_id]["updates"]
             if file_status[2] >= 100.0:
-                ui.markdown(f"<b>{file_status[0].replace('_', '\\_')}</b>")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}</b>"
+                )
                 with ui.row():
                     ui.button(
                         "Editor herunterladen (Lokal)",
-                        on_click=partial(download_editor, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            download_editor, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "Editor öffnen (Server)",
-                        on_click=partial(open_editor, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            open_editor, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "SRT-Datei",
-                        on_click=partial(download_srt, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            download_srt, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "Datei entfernen",
@@ -438,7 +491,9 @@ async def main_page():
                     any_file_ready = True
                 ui.separator()
             elif file_status[2] == -1:
-                ui.markdown(f"<b>{file_status[0].replace('_', '\\_')}:</b> {file_status[1]}")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}"
+                )
                 ui.button(
                     "Datei entfernen",
                     on_click=partial(
@@ -451,7 +506,10 @@ async def main_page():
                 ).props("no-caps")
                 ui.separator()
         if any_file_ready:
-            ui.button("Alle Dateien herunterladen", on_click=partial(download_all, user_id=user_id)).props("no-caps")
+            ui.button(
+                "Alle Dateien herunterladen",
+                on_click=partial(download_all, user_id=user_id),
+            ).props("no-caps")
 
     def display_files(user_id):
         read_files(user_id)
@@ -480,8 +538,15 @@ async def main_page():
     read_files(user_id)
 
     with ui.column():
-        with ui.header(elevated=True).style("background-color: #0070b4;").props("fit=scale-down").classes("q-pa-xs-xs"):
-            ui.image(join(ROOT, "data", "banner.png")).style("height: 90px; width: 443px;")
+        with (
+            ui.header(elevated=True)
+            .style("background-color: #0070b4;")
+            .props("fit=scale-down")
+            .classes("q-pa-xs-xs")
+        ):
+            ui.image(join(ROOT, "data", "banner.png")).style(
+                "height: 90px; width: 443px;"
+            )
         with ui.row():
             with ui.column():
                 with ui.card().classes("border p-4"):
@@ -514,9 +579,15 @@ async def main_page():
                 ui.label("")
                 ui.timer(
                     2,
-                    partial(listen, user_id=user_id, refresh_file_view=refresh_file_view),
+                    partial(
+                        listen, user_id=user_id, refresh_file_view=refresh_file_view
+                    ),
                 )
-                with ui.expansion("Vokabular", icon="menu_book").classes("w-full no-wrap").style("width: min(40vw, 400px)") as expansion:
+                with (
+                    ui.expansion("Vokabular", icon="menu_book")
+                    .classes("w-full no-wrap")
+                    .style("width: min(40vw, 400px)") as expansion
+                ):
                     user_storage[user_id]["textarea"] = ui.textarea(
                         label="Vokabular",
                         placeholder="Zürich\nUster\nUitikon",
@@ -526,14 +597,23 @@ async def main_page():
                     if hotwords:
                         user_storage[user_id]["textarea"].value = hotwords
                         expansion.open()
-                with ui.expansion("Informationen", icon="help_outline").classes("w-full no-wrap").style("width: min(40vw, 400px)"):
-                    ui.label("Diese Prototyp-Applikation wurde vom Statistischen Amt Kanton Zürich entwickelt.")
-                ui.button("Anleitung öffnen", on_click=lambda: ui.open(help_page, new_tab=True)).props("no-caps")
+                with (
+                    ui.expansion("Informationen", icon="help_outline")
+                    .classes("w-full no-wrap")
+                    .style("width: min(40vw, 400px)")
+                ):
+                    ui.label(
+                        "Diese Prototyp-Applikation wurde vom Statistischen Amt Kanton Zürich entwickelt."
+                    )
+                ui.button(
+                    "Anleitung öffnen",
+                    on_click=lambda: ui.open(help_page, new_tab=True),
+                ).props("no-caps")
 
             display_files(user_id=user_id)
 
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__mp_main__"}:
     if ONLINE:
         ui.run(
             port=8080,
@@ -541,6 +621,9 @@ if __name__ == "__main__":
             storage_secret=STORAGE_SECRET,
             favicon=join(ROOT, "data", "logo.png"),
         )
+
+        # run command with ssl certificate
+        # ui.run(port=443, reload=False, title="TranscriboZH", ssl_certfile=SSL_CERTFILE, ssl_keyfile=SSL_KEYFILE, storage_secret=STORAGE_SECRET, favicon=ROOT + "logo.png")
     else:
         ui.run(
             title="Transcribo",
