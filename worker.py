@@ -1,5 +1,4 @@
 import os
-import os.path
 import shutil
 import time
 import fnmatch
@@ -8,8 +7,9 @@ import ffmpeg
 import torch
 import whisperx
 import zipfile
+import logging
 
-from os.path import isfile
+from os.path import isfile, join, normpath, basename, dirname
 from dotenv import load_dotenv
 from pyannote.audio import Pipeline
 
@@ -18,105 +18,125 @@ from src.srt import create_srt
 from src.transcription import transcribe, get_prompt
 from src.util import time_estimate
 
-
+# Load environment variables
 load_dotenv()
 
+# Configuration
 ONLINE = os.getenv("ONLINE") == "True"
 DEVICE = os.getenv("DEVICE")
 ROOT = os.getenv("ROOT")
 WINDOWS = os.getenv("WINDOWS") == "True"
 BATCH_SIZE = int(os.getenv("BATCH_SIZE"))
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 if WINDOWS:
     os.environ["PATH"] += os.pathsep + "ffmpeg/bin"
     os.environ["PATH"] += os.pathsep + "ffmpeg"
-    os.environ["PYANNOTE_CACHE"] = ROOT + "/models"
-    os.environ["HF_HOME"] = ROOT + "/models"
+    os.environ["PYANNOTE_CACHE"] = join(ROOT, "models")
+    os.environ["HF_HOME"] = join(ROOT, "models")
 
 
 def report_error(file_name, file_name_error, user_id, text=""):
-    print(text)
-    if not os.path.exists(ROOT + "data/error/" + user_id):
-        os.makedirs(ROOT + "data/error/" + user_id)
-    with open(file_name_error + ".txt", "w") as f:
+    logger.error(text)
+    error_dir = join(ROOT, "data", "error", user_id)
+    os.makedirs(error_dir, exist_ok=True)
+    error_file = file_name_error + ".txt"
+    with open(error_file, "w") as f:
         f.write(text)
     shutil.move(file_name, file_name_error)
 
 
-def oldest_file(folder):
+def oldest_files(folder):
     matches = []
     times = []
     for root, _, filenames in os.walk(folder):
         for filename in fnmatch.filter(filenames, "*.*"):
-            file_path = os.path.join(root, filename)
+            file_path = join(root, filename)
             matches.append(file_path)
             times.append(os.path.getmtime(file_path))
-
     return [m for _, m in sorted(zip(times, matches))]
 
 
 def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
     data = None
     estimated_time = 0
-
-    file = os.path.basename(file_name)
-    user_id = os.path.normpath(file_name).split(os.path.sep)[-2]
-    file_name_error = ROOT + "data/error/" + user_id + "/" + file
-    file_name_out = ROOT + "data/out/" + user_id + "/" + file + ".mp4"
     progress_file_name = ""
 
-    try:
-        if (
-            not multi_mode
-            and os.path.exists(ROOT + "data/worker/" + user_id)
-            and os.path.isdir(ROOT + "data/worker/" + user_id)
-        ):
-            shutil.rmtree(ROOT + "data/worker/" + user_id)
-    except:
-        # we probably don't have enough permission in ROOT/data/
-        print("Could not remove folder: " + ROOT + "data/worker/" + user_id)
+    file = basename(file_name)
+    user_id = normpath(dirname(file_name)).split(os.sep)[-1]
+    file_name_error = join(ROOT, "data", "error", user_id, file)
+    file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
 
-    try:
-        if not multi_mode and not os.path.exists(ROOT + "data/out/" + user_id):
-            os.makedirs(ROOT + "data/out/" + user_id)
-    except:
-        # we probably don't have enough permission in ROOT/data/
-        print("Could not create output folder for user_id: " + user_id)
-        return data, estimated_time, progress_file_name
+    # Clean up worker directory
+    if not multi_mode:
+        worker_user_dir = join(ROOT, "data", "worker", user_id)
+        if os.path.exists(worker_user_dir):
+            try:
+                shutil.rmtree(worker_user_dir)
+            except OSError as e:
+                logger.error(f"Could not remove folder: {worker_user_dir}. Error: {e}")
 
-    # estimate run time: length of audio divided by 13
+    # Create output directory
+    if not multi_mode:
+        output_user_dir = join(ROOT, "data", "out", user_id)
+        os.makedirs(output_user_dir, exist_ok=True)
+
+    # Estimate run time
     try:
         time.sleep(2)
         estimated_time, run_time = time_estimate(file_name, ONLINE)
         if run_time == -1:
-            report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
+            report_error(
+                file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
+            )
             return data, estimated_time, progress_file_name
-
     except Exception as e:
-        print(e)
-        report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
+        logger.exception("Error estimating run time")
+        report_error(
+            file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
+        )
         return data, estimated_time, progress_file_name
 
     if not multi_mode:
+        worker_user_dir = join(ROOT, "data", "worker", user_id)
+        os.makedirs(worker_user_dir, exist_ok=True)
+        progress_file_name = join(
+            worker_user_dir, f"{estimated_time}_{int(time.time())}_{file}"
+        )
         try:
-            if not os.path.exists(ROOT + "data/worker/" + user_id):
-                os.makedirs(ROOT + "data/worker/" + user_id)
-            progress_file_name = (
-                ROOT + "data/worker/" + user_id + "/" + str(estimated_time) + "_" + str(time.time()) + "_" + file
-            )
             with open(progress_file_name, "w") as f:
                 f.write("")
-        except:
-            # we probably don't have enough permission in ROOT/data/
-            print("Could not create progress_file")
+        except OSError as e:
+            logger.error(
+                f"Could not create progress file: {progress_file_name}. Error: {e}"
+            )
 
-    # the file most likely does not have a (valid) audio stream
-    if not ffmpeg.probe(file_name, select_streams="a")["streams"]:
-        report_error(file_name, file_name_error, user_id, "Die Tonspur der Datei konnte nicht gelesen werden")
+    # Check if file has a valid audio stream
+    try:
+        if not ffmpeg.probe(file_name, select_streams="a")["streams"]:
+            report_error(
+                file_name,
+                file_name_error,
+                user_id,
+                "Die Tonspur der Datei konnte nicht gelesen werden",
+            )
+            return data, estimated_time, progress_file_name
+    except ffmpeg.Error as e:
+        logger.exception("ffmpeg error during probing")
+        report_error(
+            file_name,
+            file_name_error,
+            user_id,
+            "Die Tonspur der Datei konnte nicht gelesen werden",
+        )
         return data, estimated_time, progress_file_name
 
+    # Process audio
     if not multi_mode:
-        # -y automatically replaces file in destination if it already exists.
+        # Convert and filter audio
         exit_status = os.system(
             f'ffmpeg -y -i "{file_name}" -filter:v scale=320:-2 -af "lowpass=3000,highpass=200" "{file_name_out}"'
         )
@@ -125,16 +145,21 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
                 f'ffmpeg -y -i "{file_name}" -c:v copy -af "lowpass=3000,highpass=200" "{file_name_out}"'
             )
         if not exit_status == 0:
-            file_name_out = file_name
-            print("Exit status: " + str(exit_status))
+            logger.exception("ffmpeg error during audio processing")
+            file_name_out = file_name  # Fallback to original file
+
     else:
         file_name_out = file_name
 
+    # Load hotwords
+    hotwords = []
+    hotwords_file = join(ROOT, "data", "in", user_id, "hotwords.txt")
+    if isfile(hotwords_file):
+        with open(hotwords_file, "r") as h:
+            hotwords = h.read().splitlines()
+
+    # Transcribe
     try:
-        hotwords = []
-        if isfile(ROOT + "data/in/" + user_id + "/hotwords.txt"):
-            with open(ROOT + "data/in/" + user_id + "/hotwords.txt", "r") as h:
-                hotwords = h.read().split("\n")
         data = transcribe(
             file_name_out,
             model,
@@ -146,8 +171,10 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
             multi_mode_track=multi_mode_track,
         )
     except Exception as e:
-        report_error(file_name, file_name_error, user_id, "Transkription fehlgeschlagen")
-        print(e)
+        logger.exception("Transcription failed")
+        report_error(
+            file_name, file_name_error, user_id, "Transkription fehlgeschlagen"
+        )
 
     return data, estimated_time, progress_file_name
 
@@ -158,6 +185,7 @@ if __name__ == "__main__":
     else:
         compute_type = "float16"
 
+    # Load models
     if ONLINE:
         model = whisperx.load_model("large-v3", DEVICE, compute_type=compute_type)
     else:
@@ -165,7 +193,7 @@ if __name__ == "__main__":
             "large-v3",
             DEVICE,
             compute_type=compute_type,
-            download_root="models/whisperx",
+            download_root=join("models", "whisperx"),
         )
 
     model.model.get_prompt = types.MethodType(get_prompt, model.model)
@@ -173,141 +201,164 @@ if __name__ == "__main__":
         "pyannote/speaker-diarization", use_auth_token=os.getenv("HF_AUTH_TOKEN")
     ).to(torch.device(DEVICE))
 
+    # Create necessary directories
     for directory in ["data/in/", "data/out/", "data/error/", "data/worker/"]:
-        if not os.path.exists(ROOT + directory):
-            os.makedirs(ROOT + directory)
+        os.makedirs(join(ROOT, directory), exist_ok=True)
 
-    print(
-        """This transcription software (the Software) incorporates the open-source model Whisper Large v3 (the Model) and has been developed according to and with the intent to be used under Swiss law. Please be aware that the EU Artificial Intelligence Act (EU AI Act) may, under certain circumstances, be applicable to your use of the Software. You are solely responsible for ensuring that your use of the Software as well as of the underlying Model complies with all applicable local, national and international laws and regulations. By using this Software, you acknowledge and agree (a) that it is your responsibility to assess which laws and regulations, in particular regarding the use of AI technologies, are applicable to your intended use and to comply therewith, and (b) that you will hold us harmless from any action, claims, liability or loss in respect of your use of the Software."""
+    disclaimer = (
+        "This transcription software (the Software) incorporates the open-source model Whisper Large v3 "
+        "(the Model) and has been developed according to and with the intent to be used under Swiss law. "
+        "Please be aware that the EU Artificial Intelligence Act (EU AI Act) may, under certain circumstances, "
+        "be applicable to your use of the Software. You are solely responsible for ensuring that your use of "
+        "the Software as well as of the underlying Model complies with all applicable local, national and "
+        "international laws and regulations. By using this Software, you acknowledge and agree (a) that it is "
+        "your responsibility to assess which laws and regulations, in particular regarding the use of AI "
+        "technologies, are applicable to your intended use and to comply therewith, and (b) that you will hold "
+        "us harmless from any action, claims, liability or loss in respect of your use of the Software."
     )
-    print("worker ready")
+    logger.info(disclaimer)
+    logger.info("Worker ready")
+
     while True:
         try:
-            files_sorted_by_date = oldest_file(ROOT + "data/in/")
-        except:
-            pass
+            files_sorted_by_date = oldest_files(join(ROOT, "data", "in"))
+        except Exception as e:
+            logger.exception("Error accessing input directory")
+            time.sleep(1)
+            continue
 
         for file_name in files_sorted_by_date:
-            multi_mode = False
+            file = basename(file_name)
+            user_id = normpath(dirname(file_name)).split(os.sep)[-1]
 
-            file = os.path.basename(file_name)
-            user_id = os.path.normpath(file_name).split(os.path.sep)[-2]
-
-            file_name_error = ROOT + "data/error/" + user_id + "/" + file
-            file_name_out = ROOT + "data/out/" + user_id + "/" + file + ".mp4"
-            file_name_viewer = ROOT + "data/out/" + user_id + "/" + file + ".html"
-            file_name_srt = ROOT + "data/out/" + user_id + "/" + file + ".srt"
-
-            # Skip all files that have already been transcribed.
-            if (not isfile(file_name) or isfile(file_name_viewer)) or file == "hotwords.txt":
+            if file == "hotwords.txt":
                 continue
 
-            # Transcribe all zipped files and combine their audio
-            if file_name[-4:] == ".zip":
+            file_name_viewer = join(ROOT, "data", "out", user_id, file + ".html")
+
+            # Skip files that have already been processed
+            if not isfile(file_name) or isfile(file_name_viewer):
+                continue
+
+            # Check if it's a zip file
+            if file_name.lower().endswith(".zip"):
                 try:
-                    shutil.rmtree(ROOT + "data/worker/zip", ignore_errors=True)
-                    os.makedirs(ROOT + "data/worker/zip")
+                    zip_extract_dir = join(ROOT, "data", "worker", "zip")
+                    shutil.rmtree(zip_extract_dir, ignore_errors=True)
+                    os.makedirs(zip_extract_dir, exist_ok=True)
+
                     with zipfile.ZipFile(file_name, "r") as zip_ref:
-                        zip_ref.extractall(ROOT + "data/worker/zip")
+                        zip_ref.extractall(zip_extract_dir)
+
                     multi_mode = True
                     data_parts = []
                     estimated_time = 0
                     data = []
                     file_parts = []
-                    for root, _, filenames in os.walk(ROOT + "data/worker/zip"):
-                        for filename in fnmatch.filter(filenames, "*.*"):
-                            estimated_time_part, run_time = time_estimate(os.path.join(root, filename), ONLINE)
-                            estimated_time += estimated_time_part
-                        progress_file_name = (
-                            ROOT
-                            + "data/worker/"
-                            + user_id
-                            + "/"
-                            + str(estimated_time)
-                            + "_"
-                            + str(time.time())
-                            + "_"
-                            + file
+
+                    # Collect files from zip
+                    for root, _, filenames in os.walk(zip_extract_dir):
+                        audio_files = [
+                            fn for fn in filenames if fnmatch.fnmatch(fn, "*.*")
+                        ]
+                        for filename in audio_files:
+                            file_path = join(root, filename)
+                            est_time_part, _ = time_estimate(file_path, ONLINE)
+                            estimated_time += est_time_part
+
+                    progress_file_name = join(
+                        ROOT,
+                        "data",
+                        "worker",
+                        user_id,
+                        f"{estimated_time}_{int(time.time())}_{file}",
+                    )
+                    with open(progress_file_name, "w") as f:
+                        f.write("")
+
+                    # Transcribe each file
+                    for track, filename in enumerate(audio_files):
+                        file_path = join(root, filename)
+                        file_parts.append(f'-i "{file_path}"')
+                        data_part, _, _ = transcribe_file(
+                            file_path, multi_mode=True, multi_mode_track=track
                         )
+                        data_parts.append(data_part)
 
-                        with open(progress_file_name, "w") as f:
-                            f.write("")
-
-                        for track, filename in enumerate(fnmatch.filter(filenames, "*.*")):
-                            file_parts.append(' -i "' + str(os.path.join(root, filename)) + '"')
-                            data_part, _, _ = transcribe_file(os.path.join(root, filename), multi_mode, track)
-                            data_parts.append(data_part)
-
-                    earliest_index = 0
-                    while True and earliest_index >= 0:
-                        earliest_start = -1
-                        earliest_index = -1
-                        for i in range(len(data_parts)):
-                            if len(data_parts[i]) > 0 and (
-                                earliest_start == -1 or data_parts[i][0]["start"] < earliest_start
-                            ):
-                                earliest_start = data_parts[i][0]["start"]
-                                earliest_index = i
-                        data.append(data_parts[earliest_index][0])
-                        data_parts[earliest_index] = data_parts[earliest_index][1:]
-
-                        if sum([len(part) for part in data_parts]) == 0:
+                    # Merge data
+                    while any(data_parts):
+                        earliest = min(
+                            [(i, dp[0]) for i, dp in enumerate(data_parts) if dp],
+                            key=lambda x: x[1]["start"],
+                            default=(None, None),
+                        )
+                        if earliest[0] is None:
                             break
+                        data.append(earliest[1])
+                        data_parts[earliest[0]].pop(0)
 
-                    if not isfile(file_name_out):
-                        os.system(
-                            "ffmpeg "
-                            + "".join(file_parts)
-                            + " -filter_complex amix=inputs="
-                            + str(len(file_parts))
-                            + ":duration=first "
-                            + ROOT
-                            + "data/worker/zip/tmp.mp4"
-                        )
+                    # Merge audio files
+                    output_audio = join(ROOT, "data", "worker", "zip", "tmp.mp4")
+                    ffmpeg_input = " ".join(file_parts)
+                    ffmpeg_cmd = f'ffmpeg {ffmpeg_input} -filter_complex amix=inputs={len(file_parts)}:duration=first "{output_audio}"'
+                    os.system(ffmpeg_cmd)
 
-                        # -y automatically replaces file in destination if it already exists.
+                    # Process merged audio
+                    file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
+                    exit_status = os.system(
+                        f'ffmpeg -y -i "{output_audio}" -filter:v scale=320:-2 -af "lowpass=3000,highpass=200" "{file_name_out}"'
+                    )
+                    if exit_status == 256:
                         exit_status = os.system(
-                            'ffmpeg -y -i "'
-                            + ROOT
-                            + "data/worker/zip/tmp.mp4"
-                            + f'" -filter:v scale=320:-2 -af "lowpass=3000,highpass=200" "{file_name_out}"'
+                            f'ffmpeg -y -i "{output_audio}" -c:v copy -af "lowpass=3000,highpass=200" "{file_name_out}"'
                         )
-                        if exit_status == 256:
-                            exit_status = os.system(
-                                'ffmpeg -y -i "'
-                                + ROOT
-                                + "data/worker/zip/tmp.mp4"
-                                + f'" -c:v copy -af "lowpass=3000,highpass=200" "{file_name_out}"'
-                            )
-                        shutil.rmtree(ROOT + "data/worker/zip", ignore_errors=True)
-                        if not exit_status == 0:
-                            print("Exit status: " + str(exit_status))
+                    if not exit_status == 0:
+                        logger.exception("ffmpeg error during audio processing")
+                        file_name_out = output_audio  # Fallback to original fileue)
+
+                    shutil.rmtree(zip_extract_dir, ignore_errors=True)
                 except Exception as e:
-                    report_error(file_name, file_name_error, user_id, "Transkription fehlgeschlagen")
-                    print(e)
+                    logger.exception("Transcription failed for zip file")
+                    report_error(
+                        file_name,
+                        join(ROOT, "data", "error", user_id, file),
+                        user_id,
+                        "Transkription fehlgeschlagen",
+                    )
+                    continue
             else:
+                # Single file transcription
                 data, estimated_time, progress_file_name = transcribe_file(file_name)
 
             if data is None:
                 continue
+
+            # Generate outputs
             try:
+                file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
+
                 srt = create_srt(data)
                 viewer = create_viewer(data, file_name_out, True, False, ROOT)
 
+                file_name_srt = join(ROOT, "data", "out", user_id, file + ".srt")
                 with open(file_name_viewer, "w", encoding="utf-8") as f:
                     f.write(viewer)
                 with open(file_name_srt, "w", encoding="utf-8") as f:
                     f.write(srt)
 
-                print("Estimated Time " + str(estimated_time))
-
+                logger.info(f"Estimated Time: {estimated_time}")
             except Exception as e:
-                report_error(file_name, file_name_error, user_id, "Fehler beim Erstellen des Editors")
-                print(e)
+                logger.exception("Error creating editor")
+                report_error(
+                    file_name,
+                    join(ROOT, "data", "error", user_id, file),
+                    user_id,
+                    "Fehler beim Erstellen des Editors",
+                )
 
-            if os.path.exists(progress_file_name):
+            if progress_file_name and os.path.exists(progress_file_name):
                 os.remove(progress_file_name)
 
-            break
+            break  # Process one file at a time
 
         time.sleep(1)
