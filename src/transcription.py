@@ -64,7 +64,6 @@ def transcribe(
     result1 = model.transcribe(audio, batch_size=batch_size, language="de")
     if len(hotwords) > 0:
         model.options = model.options._replace(prefix=None)
-    print(str(time.time() - start))
 
     # Align whisper output.
     model_a, metadata = whisperx.load_align_model(language_code=result1["language"], device=device)
