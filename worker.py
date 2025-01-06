@@ -166,7 +166,7 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
             diarize_model,
             DEVICE,
             None,
-            add_language=True,
+            add_language=(False if DEVICE == "mps" else True), # on MPS is rather slow and unreliable, but you can try with setting this to true
             hotwords=hotwords,
             multi_mode_track=multi_mode_track,
         )
@@ -180,18 +180,20 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
 
 
 if __name__ == "__main__":
-    if DEVICE == "cpu":
+    WHISPER_DEVICE = "cpu" if DEVICE == "mps" else DEVICE
+    if WHISPER_DEVICE == "cpu":
         compute_type = "float32"
     else:
         compute_type = "float16"
 
     # Load models
+    whisperx_model = "tiny.en" if DEVICE == "mps" else "large-v3" # we can load a really small one for mps, because we use mlx_whisper later and only need whisperx for diarization and alignment
     if ONLINE:
-        model = whisperx.load_model("large-v3", DEVICE, compute_type=compute_type)
+        model = whisperx.load_model(whisperx_model, WHISPER_DEVICE , compute_type=compute_type)
     else:
         model = whisperx.load_model(
-            "large-v3",
-            DEVICE,
+            whisperx_model,
+            WHISPER_DEVICE,
             compute_type=compute_type,
             download_root=join("models", "whisperx"),
         )
@@ -358,6 +360,9 @@ if __name__ == "__main__":
 
             if progress_file_name and os.path.exists(progress_file_name):
                 os.remove(progress_file_name)
+            if DEVICE == "mps":
+                print("Exiting worker to prevent memory leaks with MPS...")
+                exit(0) # Due to memory leak problems, we restart the worker after each transcription
 
             break  # Process one file at a time
 
