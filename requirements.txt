@@ -10,4 +10,5 @@ python-dotenv==1.0.1
 whisperx==3.2.0
 speechbrain==0.5.16
 numpy==1.26.3
+pydub==0.25.1
 

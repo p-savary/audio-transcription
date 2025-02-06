@@ -16,7 +16,7 @@ from pyannote.audio import Pipeline
 from src.viewer import create_viewer
 from src.srt import create_srt
 from src.transcription import transcribe, get_prompt
-from src.util import time_estimate
+from src.util import time_estimate, isolate_voices
 
 # Load environment variables
 load_dotenv()
@@ -60,7 +60,9 @@ def oldest_files(folder):
     return [m for _, m in sorted(zip(times, matches))]
 
 
-def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
+def transcribe_file(
+    file_name, multi_mode=False, multi_mode_track=None, audio_files=None
+):
     data = None
     estimated_time = 0
     progress_file_name = ""
@@ -166,7 +168,9 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None):
             diarize_model,
             DEVICE,
             None,
-            add_language=(False if DEVICE == "mps" else True), # on MPS is rather slow and unreliable, but you can try with setting this to true
+            add_language=(
+                False if DEVICE == "mps" else True
+            ),  # on MPS is rather slow and unreliable, but you can try with setting this to true
             hotwords=hotwords,
             multi_mode_track=multi_mode_track,
         )
@@ -187,9 +191,13 @@ if __name__ == "__main__":
         compute_type = "float16"
 
     # Load models
-    whisperx_model = "tiny.en" if DEVICE == "mps" else "large-v3" # we can load a really small one for mps, because we use mlx_whisper later and only need whisperx for diarization and alignment
+    whisperx_model = (
+        "tiny.en" if DEVICE == "mps" else "large-v3"
+    )  # we can load a really small one for mps, because we use mlx_whisper later and only need whisperx for diarization and alignment
     if ONLINE:
-        model = whisperx.load_model(whisperx_model, WHISPER_DEVICE , compute_type=compute_type)
+        model = whisperx.load_model(
+            whisperx_model, WHISPER_DEVICE, compute_type=compute_type
+        )
     else:
         model = whisperx.load_model(
             whisperx_model,
@@ -278,6 +286,8 @@ if __name__ == "__main__":
                     with open(progress_file_name, "w") as f:
                         f.write("")
 
+                    isolate_voices([join(root, filename) for filename in audio_files])
+
                     # Transcribe each file
                     for track, filename in enumerate(audio_files):
                         file_path = join(root, filename)
@@ -296,6 +306,7 @@ if __name__ == "__main__":
                         )
                         if earliest[0] is None:
                             break
+
                         data.append(earliest[1])
                         data_parts[earliest[0]].pop(0)
 
@@ -362,7 +373,9 @@ if __name__ == "__main__":
                 os.remove(progress_file_name)
             if DEVICE == "mps":
                 print("Exiting worker to prevent memory leaks with MPS...")
-                exit(0) # Due to memory leak problems, we restart the worker after each transcription
+                exit(
+                    0
+                )  # Due to memory leak problems, we restart the worker after each transcription
 
             break  # Process one file at a time
 
