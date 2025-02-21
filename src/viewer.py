@@ -592,6 +592,7 @@ def read_content_summary(file_name):
 
 	index = lines.find('selected="selected">')
 	content = lines[index + len('selected="selected">'):]
+	content = content[:content.find('<script language="javascript">')]
 	while index > -1:
 		content_out += content[:content.find('</option>')] + ': '
 		
@@ -603,8 +604,6 @@ def read_content_summary(file_name):
 			content_out += content[:content.find('</span>')] + '\n'
 
 		index = content.find('selected="selected">')
-		if content.find('<script language="javascript">') < index:
-			break
 		content = content[index + len('selected="selected">'):]
 	
 	return content_out, lines
