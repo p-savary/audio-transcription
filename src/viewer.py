@@ -1,11 +1,13 @@
 import os
 import datetime
+from os.path import join
 from dotenv import load_dotenv
 
 
 load_dotenv()
 
 ADDITIONAL_SPEAKERS = int(os.getenv("ADDITIONAL_SPEAKERS"))
+ROOT = os.getenv("ROOT")
 
 
 # function to generate the viewer html-file.
@@ -76,7 +78,7 @@ def meta_data(file_name, encode_base64):
 
 def speaker_information(data):
     content = '\t\t\t\t<div style="margin-top:10px;" class="viewer-hidden">\n'
-    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] != "unknown"]))
 
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
@@ -84,7 +86,7 @@ def speaker_information(data):
     speakers.append("unknown")
 
     for idx, speaker in enumerate(speakers):
-        if speaker is not "unknown":
+        if speaker != "unknown":
             content += f'\t\t\t\t\t<span contenteditable="true" class="form-control" id="IN_SPEAKER_{str(idx).zfill(2)}" style="margin-top:4px;">Person {speaker[-2:]}</span>\n'
     content += "\t\t\t\t<br><br><br><br><br></div>\n"
     content += "\t\t\t\t</div>\n"
@@ -117,7 +119,7 @@ def transcript(data, combine_speaker):
     content = '\t\t<div class="col-md-6" style="width: 60%; max-width: 90ch; z-index: 1; margin-left: auto; margin-right: auto">\n'
     content += '\t\t\t<div class="wrapper" style="margin: 0.5rem auto 0; max-width: 80ch;" id="editor">\n'
 
-    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] != "unknown"]))
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
         speakers.append(str(n_speakers + i).zfill(2))
@@ -126,7 +128,7 @@ def transcript(data, combine_speaker):
     table_elements = ""
     last_speaker = None
     for segment in data:
-        if segment["speaker"] not in speaker_order and segment["speaker"] is not "unknown":
+        if segment["speaker"] not in speaker_order and segment["speaker"] != "unknown":
             speaker_order.append(segment["speaker"])
 
     for i in range(ADDITIONAL_SPEAKERS):
@@ -187,7 +189,7 @@ def transcript(data, combine_speaker):
 
 
 def javascript(data, file_path, encode_base64, file_name):
-    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
+    speakers = sorted(set([segment["speaker"] for segment in data if segment["speaker"] != "unknown"]))
     n_speakers = len(speakers)
     for i in range(ADDITIONAL_SPEAKERS):
         speakers.append(str(n_speakers + i).zfill(2))
@@ -195,13 +197,13 @@ def javascript(data, file_path, encode_base64, file_name):
 
     speakers_array = "var speakers = Array("
     for idx, speaker in enumerate(speakers):
-        if speaker is not "unknown":
+        if speaker != "unknown":
             speakers_array += f'"IN_SPEAKER_{str(idx).zfill(2)}", '
     if len(speakers) > 1:
         speakers_array = speakers_array[:-2] + ")"
     else:
         speakers_array += ")"
-    number_of_speakers = len(set([segment["speaker"] for segment in data if segment["speaker"] is not "unknown"]))
+    number_of_speakers = len(set([segment["speaker"] for segment in data if segment["speaker"] != "unknown"]))
     content = """<script language="javascript">\n"""
     content += f'var fileName = "{file_name.split(".")[0]}"\n'
     content += """var source = Array(null, null, null, null, null)
@@ -559,3 +561,50 @@ function changeVideo(id) {
     content += "</script>"
 
     return content
+
+
+def write_content_summary(summary, lines, file_name):
+	lines = lines[:lines.find('''		<div class="col-md-6" style="width: 60%; max-width: 90ch; z-index: 1; margin-left: auto; margin-right: auto">
+			<div class="wrapper" style="margin: 0.5rem auto 0; max-width: 80ch;" id="editor">
+			<div>''') + len('''		<div class="col-md-6" style="width: 60%; max-width: 90ch; z-index: 1; margin-left: auto; margin-right: auto">
+			<div class="wrapper" style="margin: 0.5rem auto 0; max-width: 80ch;" id="editor">
+			<div>''')] + summary + lines[lines.find('''</div>
+		</div>
+	</div>'''):]
+	lines = lines.replace('''				<div style="margin-top:10px;" class="viewer-hidden">
+					<a href="#" id="viewer-link" onclick="viewerClick()" class="btn btn-primary">Viewer erstellen</a>
+					<a href="#" id="text-link" onclick="textClick()" class="btn btn-primary">Textdatei exportieren</a>
+					<a href="#" id="download-link" onclick="downloadClick()" class="btn btn-primary">Speichern</a>
+					<br><span>Verzögerung: </span><span contenteditable="true" id="delay" class="border rounded"></span>
+					<input type="checkbox" id="ignore_lang" value="ignore_lang" style="margin-left: 5px" onclick="changeCheckbox(this)">
+					<label for="ignore_lang">Fremdsprachen beim Exportieren entfernen</label>
+				</div>''', '')
+	with open(file_name, 'w', encoding = 'utf-8') as f:
+		f.write(lines)
+        
+        
+def read_content_summary(file_name):
+	lines = ''
+	with open(file_name, 'r', encoding = 'utf-8') as f:
+		lines = f.read()
+		
+	content_out = ''
+
+	index = lines.find('selected="selected">')
+	content = lines[index + len('selected="selected">'):]
+	while index > -1:
+		content_out += content[:content.find('</option>')] + ': '
+		
+		index = content.find('class="segment" title=')
+		if index == -1:
+			break
+		else:
+			content = content[index + len('class="segment" title="0:00:02 - 0:00:04">'):]
+			content_out += content[:content.find('</span>')] + '\n'
+
+		index = content.find('selected="selected">')
+		if content.find('<script language="javascript">') < index:
+			break
+		content = content[index + len('selected="selected">'):]
+	
+	return content_out, lines
