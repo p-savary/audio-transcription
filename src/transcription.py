@@ -55,6 +55,7 @@ def transcribe(
     hotwords=[],
     batch_size=4,
     multi_mode_track=None,
+    language="de",
 ):
     torch.cuda.empty_cache()
 
@@ -65,10 +66,11 @@ def transcribe(
 
     if len(hotwords) > 0:
         model.options = model.options._replace(prefix=" ".join(hotwords))
-    print ("Transcribing...")
+    print("Transcribing...")
     if DEVICE == "mps":
         import mlx_whisper
-        decode_options={"language": None, "prefix": " ".join(hotwords)}
+
+        decode_options = {"language": None, "prefix": " ".join(hotwords)}
 
         result1 = mlx_whisper.transcribe(
             complete_name,
@@ -76,7 +78,7 @@ def transcribe(
             **decode_options,
         )
     else:
-        result1 = model.transcribe(audio, batch_size=batch_size, language="de")
+        result1 = model.transcribe(audio, batch_size=batch_size, language=language)
 
     print(f"Transcription took {time.time() - start_time:.2f} seconds.")
     if len(hotwords) > 0:
@@ -86,7 +88,7 @@ def transcribe(
     model_a, metadata = whisperx.load_align_model(language_code=result1["language"], device=device)
     start_aligning = time.time()
 
-    print ("Aligning...")
+    print("Aligning...")
     result2 = whisperx.align(
         result1["segments"],
         model_a,
@@ -100,24 +102,26 @@ def transcribe(
 
     if add_language:
         start_language = time.time()
-        print ("Adding language...")
+        print("Adding language...")
         for segment in result2["segments"]:
             start = (int(segment["start"]) * 16_000) - 8_000
             end = ((int(segment["end"]) + 1) * 16_000) + 8_000
             segment_audio = audio[start:end]
-            if (DEVICE == "mps"):
+            if DEVICE == "mps":
                 ## This is a workaround to use the whisper model in mps, it doesn't have "detect language" method
-                decode_options={"language": None, "prefix": " ".join(hotwords)}
-                language = mlx_whisper.transcribe(segment_audio,path_or_hf_repo="mlx-community/whisper-large-v3-mlx", **decode_options)
+                decode_options = {"language": None, "prefix": " ".join(hotwords)}
+                language = mlx_whisper.transcribe(
+                    segment_audio, path_or_hf_repo="mlx-community/whisper-large-v3-mlx", **decode_options
+                )
                 segment["language"] = language["language"]
             else:
-                language, language_probability = detect_language(segment_audio, model)
-                segment["language"] = language if language_probability > 0.85 else "de"
+                detected_language, language_probability = detect_language(segment_audio, model)
+                segment["language"] = detected_language if language_probability > 0.85 else language
         print(f"Adding language took {time.time() - start_language:.2f} seconds.")
 
     # Diarize and assign speaker labels.
     start_diarize = time.time()
-    print ("Diarizing...")
+    print("Diarizing...")
     audio_data = {
         "waveform": torch.from_numpy(audio[None, :]),
         "sample_rate": SAMPLE_RATE,
@@ -136,7 +140,7 @@ def transcribe(
         result3 = result2
 
     print(f"Diarization took {time.time() - start_diarize:.2f} seconds.")
-    print (f"Total time: {time.time() - start_time:.2f} seconds.")
+    print(f"Total time: {time.time() - start_time:.2f} seconds.")
     torch.cuda.empty_cache()
     if DEVICE == "mps":
         torch.mps.empty_cache()

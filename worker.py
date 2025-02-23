@@ -152,6 +152,13 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_fi
         with open(hotwords_file, "r") as h:
             hotwords = h.read().splitlines()
 
+    language_file = join(ROOT, "data", "in", user_id, "language.txt")
+    if isfile(language_file):
+        with open(language_file, "r") as h:
+            language = h.read()
+    else:
+        language = "de"
+
     # Transcribe
     try:
         data = transcribe(
@@ -165,6 +172,7 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_fi
             ),  # on MPS is rather slow and unreliable, but you can try with setting this to true
             hotwords=hotwords,
             multi_mode_track=multi_mode_track,
+            language=language,
         )
     except Exception as e:
         logger.exception("Transcription failed")
@@ -251,7 +259,7 @@ if __name__ == "__main__":
             file = basename(file_name)
             user_id = normpath(dirname(file_name)).split(os.sep)[-1]
 
-            if file == "hotwords.txt":
+            if file == "hotwords.txt" or file == "language.txt":
                 continue
 
             file_name_viewer = join(ROOT, "data", "out", user_id, file + ".html")
