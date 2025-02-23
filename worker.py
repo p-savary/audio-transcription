@@ -60,9 +60,7 @@ def oldest_files(folder):
     return [m for _, m in sorted(zip(times, matches))]
 
 
-def transcribe_file(
-    file_name, multi_mode=False, multi_mode_track=None, audio_files=None
-):
+def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_files=None):
     data = None
     estimated_time = 0
     progress_file_name = ""
@@ -91,30 +89,22 @@ def transcribe_file(
         time.sleep(2)
         estimated_time, run_time = time_estimate(file_name, ONLINE)
         if run_time == -1:
-            report_error(
-                file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
-            )
+            report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
             return data, estimated_time, progress_file_name
     except Exception as e:
         logger.exception("Error estimating run time")
-        report_error(
-            file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden"
-        )
+        report_error(file_name, file_name_error, user_id, "Datei konnte nicht gelesen werden")
         return data, estimated_time, progress_file_name
 
     if not multi_mode:
         worker_user_dir = join(ROOT, "data", "worker", user_id)
         os.makedirs(worker_user_dir, exist_ok=True)
-        progress_file_name = join(
-            worker_user_dir, f"{estimated_time}_{int(time.time())}_{file}"
-        )
+        progress_file_name = join(worker_user_dir, f"{estimated_time}_{int(time.time())}_{file}")
         try:
             with open(progress_file_name, "w") as f:
                 f.write("")
         except OSError as e:
-            logger.error(
-                f"Could not create progress file: {progress_file_name}. Error: {e}"
-            )
+            logger.error(f"Could not create progress file: {progress_file_name}. Error: {e}")
 
     # Check if file has a valid audio stream
     try:
@@ -160,6 +150,13 @@ def transcribe_file(
         with open(hotwords_file, "r") as h:
             hotwords = h.read().splitlines()
 
+    language_file = join(ROOT, "data", "in", user_id, "language.txt")
+    if isfile(language_file):
+        with open(language_file, "r") as h:
+            language = h.read()
+    else:
+        language = "de"
+
     # Transcribe
     try:
         data = transcribe(
@@ -173,12 +170,11 @@ def transcribe_file(
             ),  # on MPS is rather slow and unreliable, but you can try with setting this to true
             hotwords=hotwords,
             multi_mode_track=multi_mode_track,
+            language=language,
         )
     except Exception as e:
         logger.exception("Transcription failed")
-        report_error(
-            file_name, file_name_error, user_id, "Transkription fehlgeschlagen"
-        )
+        report_error(file_name, file_name_error, user_id, "Transkription fehlgeschlagen")
 
     return data, estimated_time, progress_file_name
 
@@ -195,9 +191,7 @@ if __name__ == "__main__":
         "tiny.en" if DEVICE == "mps" else "large-v3"
     )  # we can load a really small one for mps, because we use mlx_whisper later and only need whisperx for diarization and alignment
     if ONLINE:
-        model = whisperx.load_model(
-            whisperx_model, WHISPER_DEVICE, compute_type=compute_type
-        )
+        model = whisperx.load_model(whisperx_model, WHISPER_DEVICE, compute_type=compute_type)
     else:
         model = whisperx.load_model(
             whisperx_model,
@@ -241,7 +235,7 @@ if __name__ == "__main__":
             file = basename(file_name)
             user_id = normpath(dirname(file_name)).split(os.sep)[-1]
 
-            if file == "hotwords.txt":
+            if file == "hotwords.txt" or file == "language.txt":
                 continue
 
             file_name_viewer = join(ROOT, "data", "out", user_id, file + ".html")
@@ -268,9 +262,7 @@ if __name__ == "__main__":
 
                     # Collect files from zip
                     for root, _, filenames in os.walk(zip_extract_dir):
-                        audio_files = [
-                            fn for fn in filenames if fnmatch.fnmatch(fn, "*.*")
-                        ]
+                        audio_files = [fn for fn in filenames if fnmatch.fnmatch(fn, "*.*")]
                         for filename in audio_files:
                             file_path = join(root, filename)
                             est_time_part, _ = time_estimate(file_path, ONLINE)
@@ -292,9 +284,7 @@ if __name__ == "__main__":
                     for track, filename in enumerate(audio_files):
                         file_path = join(root, filename)
                         file_parts.append(f'-i "{file_path}"')
-                        data_part, _, _ = transcribe_file(
-                            file_path, multi_mode=True, multi_mode_track=track
-                        )
+                        data_part, _, _ = transcribe_file(file_path, multi_mode=True, multi_mode_track=track)
                         data_parts.append(data_part)
 
                     # Merge data
@@ -373,9 +363,7 @@ if __name__ == "__main__":
                 os.remove(progress_file_name)
             if DEVICE == "mps":
                 print("Exiting worker to prevent memory leaks with MPS...")
-                exit(
-                    0
-                )  # Due to memory leak problems, we restart the worker after each transcription
+                exit(0)  # Due to memory leak problems, we restart the worker after each transcription
 
             break  # Process one file at a time
 

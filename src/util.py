@@ -11,16 +11,10 @@ def isolate_voices(file_paths):
         chunked = []
         for file in file_paths:
             audio = AudioSegment.from_file(file)
-            chunked.append(
-                [
-                    audio[i : i + chunk_length_ms]
-                    for i in range(0, len(audio), chunk_length_ms)
-                ]
-            )
+            chunked.append([audio[i : i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)])
 
         processed_chunks = [
-            filter_nondominant_voice([chunks[i] for chunks in chunked], index)
-            for i in range(len(chunked[0]))
+            filter_nondominant_voice([chunks[i] for chunks in chunked], index) for i in range(len(chunked[0]))
         ]
 
         processed_audio = sum(processed_chunks)
