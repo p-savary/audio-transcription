@@ -60,7 +60,7 @@ def oldest_files(folder):
     return [m for _, m in sorted(zip(times, matches))]
 
 
-def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_files=None):
+def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_files=None, language="de"):
     data = None
     estimated_time = 0
     progress_file_name = ""
@@ -150,13 +150,6 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_fi
         with open(hotwords_file, "r") as h:
             hotwords = h.read().splitlines()
 
-    language_file = join(ROOT, "data", "in", user_id, "language.txt")
-    if isfile(language_file):
-        with open(language_file, "r") as h:
-            language = h.read()
-    else:
-        language = "de"
-
     # Transcribe
     try:
         data = transcribe(
@@ -244,6 +237,13 @@ if __name__ == "__main__":
             if not isfile(file_name) or isfile(file_name_viewer):
                 continue
 
+            language_file = join(ROOT, "data", "in", user_id, "language.txt")
+            if isfile(language_file):
+                with open(language_file, "r") as h:
+                    language = h.read()
+            else:
+                language = "de"
+
             # Check if it's a zip file
             if file_name.lower().endswith(".zip"):
                 try:
@@ -284,7 +284,7 @@ if __name__ == "__main__":
                     for track, filename in enumerate(audio_files):
                         file_path = join(root, filename)
                         file_parts.append(f'-i "{file_path}"')
-                        data_part, _, _ = transcribe_file(file_path, multi_mode=True, multi_mode_track=track)
+                        data_part, _, _ = transcribe_file(file_path, multi_mode=True, multi_mode_track=track, language=language)
                         data_parts.append(data_part)
 
                     # Merge data
@@ -331,7 +331,7 @@ if __name__ == "__main__":
                     continue
             else:
                 # Single file transcription
-                data, estimated_time, progress_file_name = transcribe_file(file_name)
+                data, estimated_time, progress_file_name = transcribe_file(file_name, language=language)
 
             if data is None:
                 continue
@@ -341,7 +341,7 @@ if __name__ == "__main__":
                 file_name_out = join(ROOT, "data", "out", user_id, file + ".mp4")
 
                 srt = create_srt(data)
-                viewer = create_viewer(data, file_name_out, True, False, ROOT)
+                viewer = create_viewer(data, file_name_out, True, False, ROOT, language)
 
                 file_name_srt = join(ROOT, "data", "out", user_id, file + ".srt")
                 with open(file_name_viewer, "w", encoding="utf-8") as f:

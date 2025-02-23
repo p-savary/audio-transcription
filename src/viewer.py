@@ -11,7 +11,7 @@ ADDITIONAL_SPEAKERS = int(os.getenv("ADDITIONAL_SPEAKERS"))
 # function to generate the viewer html-file.
 # input data is the segments of the output of whisperx.assign_word_speakers: whisperx.assign_word_speakers(diarize_df, result2)['segments']
 # file_path is the path to the audio/video file
-def create_viewer(data, file_path, encode_base64, combine_speaker, root):
+def create_viewer(data, file_path, encode_base64, combine_speaker, root, language):
     for segment in data:
         if "speaker" not in segment:
             segment["speaker"] = "unknown"
@@ -23,7 +23,7 @@ def create_viewer(data, file_path, encode_base64, combine_speaker, root):
     html += buttons()
     html += meta_data(file_name, encode_base64)
     html += speaker_information(data)
-    html += transcript(data, combine_speaker)
+    html += transcript(data, combine_speaker, language)
     html += javascript(data, file_path, encode_base64, file_name)
     return html
 
@@ -113,7 +113,7 @@ def segment_buttons():
     return "<button style='float: right;' class='btn btn-danger btn-sm' onclick='removeRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-trash' viewBox='0 0 16 16'><path d='M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z'/><path d='M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z'/></svg></button><button style='float: right;' class='btn btn-primary btn-sm' onclick='addRow(this)'><svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-plus' viewBox='0 0 16 16'><path d='M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4'/></svg></button><button style=\"float: right; margin-right: 20px\" class=\"btn btn-warning btn-sm\" onclick=\"tagFunction(this)\"><svg xmlns=\"http://www.w3.org/2000/svg\" height=\"16px\" viewBox=\"0 -960 960 960\" width=\"16px\" fill=\"#5f6368\"><path d=\"m264-192 30-120H144l18-72h150l42-168H192l18-72h162l36-144h72l-36 144h144l36-144h72l-36 144h156l-18 72H642l-42 168h168l-18 72H582l-30 120h-72l30-120H366l-30 120h-72Zm120-192h144l42-168H426l-42 168Z\"/></svg></button>"
 
 
-def transcript(data, combine_speaker):
+def transcript(data, combine_speaker, language):
     content = '\t\t<div class="col-md-6" style="width: 60%; max-width: 90ch; z-index: 1; margin-left: auto; margin-right: auto">\n'
     content += '\t\t\t<div class="wrapper" style="margin: 0.5rem auto 0; max-width: 80ch;" id="editor">\n'
 
@@ -161,7 +161,7 @@ def transcript(data, combine_speaker):
                 + "</span>\n"
             )
             if "language" in segment:
-                if segment["language"] in ["de", "en", "nl"]:
+                if (language == "de" and segment["language"] in ["de", "en", "nl"]) or language == segment["language"]:
                     table_elements += '\t\t\t\t\t<input type="checkbox" class="language" name="language" value="Fremdsprache" style="margin-left: 5px" onclick="changeCheckbox(this)"/> <label for="language">Fremdsprache</label>\n'
                 else:
                     table_elements += '\t\t\t\t\t<input type="checkbox" class="language" name="language" value="Fremdsprache" style="margin-left: 5px" onclick="changeCheckbox(this)" checked="checked" /> <label for="language">Fremdsprache</label>\n'
