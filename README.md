@@ -16,12 +16,12 @@
 
 <summary>Contents</summary>
 
-- [Summarization](#summarization)
 - [Setup Instructions](#setup-instructions)
     - [Hardware requirements](#hardware-requirements)
     - [Installation](#installation)
     - [Running the Application](#running-the-application)
     - [Configuration](#configuration)
+- [Summarization](#summarization)
 - [Project Information](#project-information)
     - [What does the application do?](#what-does-the-application-do)
 - [Project team](#project-team)
@@ -30,8 +30,6 @@
 
 </details>
 
-## Summarization
-This branch includes summarization functionality using [LLama-cpp-python](https://github.com/abetlen/llama-cpp-python) to run a local language model. Setting up the model requires technical expertise. You may need to adjust code and parameters based on your hardware and system configuration.
 ### Instructions
 - Ensure that the [LLama-cpp-python](https://github.com/abetlen/llama-cpp-python) package is installed. Follow the official installation instructions, adjusting them based on your hardware setup.
 - Modify Model Initialization (`worker.py`, lines 215–222):
@@ -130,7 +128,10 @@ Start the worker and frontend scripts:
 | DEVICE | String. 'cuda' if you are using a GPU. 'cpu' otherwise. |
 | ADDITIONAL_SPEAKERS | Integer. Number of additional speakers provied in the editor |
 | BATCH_SIZE | Integer. Batch size for Whisper inference. Recommended batch size is 4 with 8GB VRAM and 32 with 16GB VRAM. |
+| SUMMARIZATION | Boolean. If True, enables summarization functionality. See [Summarization](#summarization) for more details. |
 
+## Summarization
+This is only recommended if you have experience running a local language model. To use the summarization functionality, you must install [LLama-cpp-python](https://github.com/abetlen/llama-cpp-python) and run a local language model. Setting up the model requires technical expertise, as you will need to adjust the code and parameters based on your hardware and system configuration.
 
 ## Project Information
 This application provides advanced transcription capabilities for confidential audio and video files using the state-of-the-art Whisper v3 large model (non-quantized). It offers top-tier transcription quality without licensing or usage fees, even for Swiss German.
