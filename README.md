@@ -16,6 +16,7 @@
 
 <summary>Contents</summary>
 
+- [Summarization](#summarization)
 - [Setup Instructions](#setup-instructions)
     - [Hardware requirements](#hardware-requirements)
     - [Installation](#installation)
@@ -28,6 +29,17 @@
 - [Disclaimer](#disclaimer)
 
 </details>
+
+## Summarization
+This branch includes summarization functionality using [LLama-cpp-python](https://github.com/abetlen/llama-cpp-python) to run a local language model. Setting up the model requires technical expertise. You may need to adjust code and parameters based on your hardware and system configuration.
+### Instructions
+- Ensure that the [LLama-cpp-python](https://github.com/abetlen/llama-cpp-python) package is installed. Follow the official installation instructions, adjusting them based on your hardware setup.
+- Modify Model Initialization (`worker.py`, lines 215–222):
+    - Specify the language model you want to use.
+    - Adjust the initialization parameters to match your setup.
+    - To run the model entirely on the GPU, set the parameter n_gpu_layers to -1.
+    - For more details on configuration and available parameters, refer to the llama-cpp-python repository.
+
 
 ## Setup Instructions
 ### Hardware requirements

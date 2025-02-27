@@ -3,7 +3,7 @@ import subprocess
 import os
 
 DEVICE = os.getenv("DEVICE")
-
+      
 
 def isolate_voices(file_paths):
     for index in range(len(file_paths)):

@@ -5,7 +5,7 @@ import zipfile
 import datetime
 import base64
 from os import listdir
-from os.path import isfile, join, normpath, basename, dirname
+from os.path import isfile, join
 from functools import partial
 from dotenv import load_dotenv
 from nicegui import ui, events, app
@@ -26,6 +26,7 @@ ROOT = os.getenv("ROOT")
 WINDOWS = os.getenv("WINDOWS") == "True"
 SSL_CERTFILE = os.getenv("SSL_CERTFILE")
 SSL_KEYFILE = os.getenv("SSL_KEYFILE")
+SUMMARIZATION = os.getenv("SUMMARIZATION") == "True"
 
 if WINDOWS:
     os.environ["PATH"] += os.pathsep + "ffmpeg/bin"
@@ -329,6 +330,16 @@ def listen(user_id, refresh_file_view):
         else:
             refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=False)
 
+    out_user_dir = join(ROOT, "data", "out", user_id)
+    if os.path.exists(out_user_dir):
+        for f in listdir(out_user_dir):
+            if isfile(join(out_user_dir, f)) and f.endswith(".summary"):
+                os.rename(
+                    join(out_user_dir, f),
+                    join(out_user_dir, f).replace(".summary", ".htmlsummary"),
+                )
+                refresh_file_view(user_id, False, True)
+
 
 def update_hotwords(user_id):
     if "textarea" in user_storage[user_id]:
@@ -411,6 +422,13 @@ return content.slice({i * 500_000}, {(i + 1) * 500_000});
         ui.label("Session abgelaufen. Bitte öffne den Editor erneut.")
 
 
+async def download_summary(file_name, user_id):
+    ui.download(
+        src=join(ROOT + "data/out/" + user_id, file_name + ".htmlsummary"),
+        filename=file_name.split(".")[0] + ".html",
+    )
+
+
 @ui.page("/")
 async def main_page():
     """Main page of the application."""
@@ -432,6 +450,20 @@ async def main_page():
                 ui.markdown(f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}")
                 ui.linear_progress(value=file_status[2] / 100, show_value=False, size="10px").props("instant-feedback")
                 ui.separator()
+
+    async def summarize(file_name, user_id):
+        if os.path.isfile(join(ROOT + "data/out", user_id, file_name + ".htmlsummary")):
+            os.remove(join(ROOT + "data/out", user_id, file_name + ".htmlsummary"))
+        if os.path.isfile(join(ROOT + "data/out", user_id, file_name + ".todosummary")):
+            os.remove(join(ROOT + "data/out", user_id, file_name + ".todosummary"))
+
+        prepare_download(file_name, user_id)
+        os.rename(
+            join(ROOT + "data/out/" + user_id, file_name + ".htmlfinal"),
+            join(ROOT + "data/out/" + user_id, file_name + ".todosummary"),
+        )
+
+        refresh_file_view(user_id, False, True)
 
     @ui.refreshable
     def display_results(user_id):
@@ -465,6 +497,43 @@ async def main_page():
                         color="red-5",
                     ).props("no-caps")
                     any_file_ready = True
+                if SUMMARIZATION:
+                    with ui.row():
+                        summary_create = ui.button(
+                            "Zusammenfassung erstellen",
+                            on_click=partial(
+                                summarize, file_name=file_status[0], user_id=user_id
+                            ),
+                        ).props("no-caps")
+                        summary_create.disable()
+                        summary_download = ui.button(
+                            "Zusammenfassung herunterladen",
+                            on_click=partial(
+                                download_summary,
+                                file_name=file_status[0],
+                                user_id=user_id,
+                            ),
+                        ).props("no-caps")
+                        summary_download.disable()
+
+                        if os.path.isfile(
+                            join(
+                                ROOT + "data/out",
+                                user_id,
+                                file_status[0] + ".htmlsummary",
+                            )
+                        ):
+                            summary_download.enable()
+                        if not os.path.isfile(
+                            join(
+                                ROOT + "data/out",
+                                user_id,
+                                file_status[0] + ".todosummary",
+                            )
+                        ):
+                            summary_create.enable()
+                        else:
+                            ui.label("in Bearbeitung")
                 ui.separator()
             elif file_status[2] == -1:
                 ui.markdown(f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}")
@@ -548,9 +617,18 @@ async def main_page():
                     2,
                     partial(listen, user_id=user_id, refresh_file_view=refresh_file_view),
                 )
+
+                language = "deutsch"
+                if (
+                    f"{user_id}_language" in app.storage.user
+                    and app.storage.user[f"{user_id}_language"] is not None
+                ):
+                    language = LANGUAGES[app.storage.user[f"{user_id}_language"]]
+
                 user_storage[user_id]["language"] = ui.select(
                     [LANGUAGES[key] for key in LANGUAGES],
-                    value="deutsch",
+                    value=language,
+
                     on_change=partial(update_language, user_id),
                     label="Gesprochene Sprache",
                 ).style("width: min(40vw, 400px)")

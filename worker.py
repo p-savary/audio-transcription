@@ -13,7 +13,7 @@ from os.path import isfile, join, normpath, basename, dirname
 from dotenv import load_dotenv
 from pyannote.audio import Pipeline
 
-from src.viewer import create_viewer
+from src.viewer import create_viewer, write_content_summary, read_content_summary
 from src.srt import create_srt
 from src.transcription import transcribe, get_prompt
 from src.util import time_estimate, isolate_voices
@@ -27,6 +27,14 @@ DEVICE = os.getenv("DEVICE")
 ROOT = os.getenv("ROOT")
 WINDOWS = os.getenv("WINDOWS") == "True"
 BATCH_SIZE = int(os.getenv("BATCH_SIZE"))
+SUMMARIZATION = os.getenv("SUMMARIZATION") == "True"
+
+if SUMMARIZATION:
+    from llama_cpp import Llama
+    from huggingface_hub import hf_hub_download
+    from transformers import AutoTokenizer
+    import json
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -60,7 +68,10 @@ def oldest_files(folder):
     return [m for _, m in sorted(zip(times, matches))]
 
 
-def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_files=None, language="de"):
+def transcribe_file(
+    file_name, multi_mode=False, multi_mode_track=None, audio_files=None, language="de"
+):
+
     data = None
     estimated_time = 0
     progress_file_name = ""
@@ -172,6 +183,45 @@ def transcribe_file(file_name, multi_mode=False, multi_mode_track=None, audio_fi
     return data, estimated_time, progress_file_name
 
 
+def summarize(text, llm, encoder):
+    out = llm.create_chat_completion(
+        messages=[
+            {
+                "role": "system",
+                "content": "Du bist Qwen, du verfasst Zusammenfassungen auf Deutsch und antwortest im JSON-Format",
+            },
+            {
+                "role": "user",
+                "content": """Fasse das folgende Transkript zusammen. Verwende nur die gegebenen Informationen, erfinde keine Zusätzlichen Fakten. Erwähne die wichtigen Details, wie zum Beispiel Orte, Personen oder Ereignisse. Strukturiere die Zusammenfassung in unterschiedliche Themen. Jedes Thema hat einen Namen und einen Inhalt. Formuliere sachlich und neutral. Schreib prägnant und auf Deutsch.
+Transkipt: """
+                + encoder.decode(encoder(text)["input_ids"][:30000]),
+            },
+        ],
+        response_format={
+            "type": "json_object",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "thema_name": {"type": "array", "items": {"type": "string"}},
+                    "thema_inhalt": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["thema_name", "thema_inhalt"],
+            },
+        },
+        temperature=0.5,
+    )
+
+    summary = ""
+    content = json.loads(out["choices"][0]["message"]["content"].replace("ß", "ss"))
+    for i in range(len(content["thema_name"])):
+        if len(content["thema_inhalt"]) == i:
+            break
+        summary += "<b>" + content["thema_name"][i] + "</b><br>"
+        summary += content["thema_inhalt"][i] + "<br>"
+
+    return summary
+
+
 if __name__ == "__main__":
     WHISPER_DEVICE = "cpu" if DEVICE == "mps" else DEVICE
     if WHISPER_DEVICE == "cpu":
@@ -197,6 +247,25 @@ if __name__ == "__main__":
     diarize_model = Pipeline.from_pretrained(
         "pyannote/speaker-diarization", use_auth_token=os.getenv("HF_AUTH_TOKEN")
     ).to(torch.device(DEVICE))
+
+    if SUMMARIZATION:
+        model_name_or_path = "bartowski/Qwen2.5-7B-Instruct-1M-GGUF"
+        model_basename = "Qwen2.5-7B-Instruct-1M-Q6_K.gguf"
+        model_path = hf_hub_download(
+            repo_id=model_name_or_path, filename=model_basename
+        )
+
+        # Initialize the Llama instance
+        llm = Llama(
+            model_path=model_path,
+            n_ctx=32768,
+            n_gpu_layers=0,
+            n_threads=8,
+            use_mmap=True,
+            use_mlock=False,
+            verbose=False,
+        )
+        encoder = AutoTokenizer.from_pretrained("Qwen/Qwen-7B", trust_remote_code=True)
 
     # Create necessary directories
     for directory in ["data/in/", "data/out/", "data/error/", "data/worker/"]:
@@ -284,7 +353,13 @@ if __name__ == "__main__":
                     for track, filename in enumerate(audio_files):
                         file_path = join(root, filename)
                         file_parts.append(f'-i "{file_path}"')
-                        data_part, _, _ = transcribe_file(file_path, multi_mode=True, multi_mode_track=track, language=language)
+                        data_part, _, _ = transcribe_file(
+                            file_path,
+                            multi_mode=True,
+                            multi_mode_track=track,
+                            language=language,
+                        )
+
                         data_parts.append(data_part)
 
                     # Merge data
@@ -331,7 +406,10 @@ if __name__ == "__main__":
                     continue
             else:
                 # Single file transcription
-                data, estimated_time, progress_file_name = transcribe_file(file_name, language=language)
+                data, estimated_time, progress_file_name = transcribe_file(
+                    file_name, language=language
+                )
+
 
             if data is None:
                 continue
@@ -366,5 +444,25 @@ if __name__ == "__main__":
                 exit(0)  # Due to memory leak problems, we restart the worker after each transcription
 
             break  # Process one file at a time
+
+        try:
+            files_sorted_by_date = oldest_files(join(ROOT, "data", "out"))
+        except Exception as e:
+            logger.exception("Error accessing input directory")
+            time.sleep(1)
+            continue
+
+        if SUMMARIZATION:
+            for file_name in files_sorted_by_date:
+                if file_name.endswith(".todosummary"):
+                    logger.info(f"Summarizing file")
+                    content_out, lines = read_content_summary(file_name)
+                    summary = summarize(content_out, llm, encoder)
+                    write_content_summary(
+                        summary, lines, file_name.replace(".todosummary", ".summary")
+                    )
+                    os.remove(file_name)
+                    logger.info(f"Summarizing done")
+                    break
 
         time.sleep(1)
