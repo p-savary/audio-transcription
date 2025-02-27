@@ -5,10 +5,10 @@ import zipfile
 import datetime
 import base64
 from os import listdir
-from os.path import isfile, join, normpath, basename, dirname
+from os.path import isfile, join
 from functools import partial
 from dotenv import load_dotenv
-from nicegui import ui, events, app, run
+from nicegui import ui, events, app
 
 from data.const import LANGUAGES, INVERTED_LANGUAGES
 from src.util import time_estimate
@@ -26,6 +26,7 @@ ROOT = os.getenv("ROOT")
 WINDOWS = os.getenv("WINDOWS") == "True"
 SSL_CERTFILE = os.getenv("SSL_CERTFILE")
 SSL_KEYFILE = os.getenv("SSL_KEYFILE")
+SUMMARIZATION = os.getenv("SUMMARIZATION") == "True"
 
 if WINDOWS:
     os.environ["PATH"] += os.pathsep + "ffmpeg/bin"
@@ -77,9 +78,15 @@ def read_files(user_id):
                     files_in_queue.append(f)
 
         for file_status in user_storage[user_id]["file_list"]:
-            estimated_wait_time = sum(f[3] for f in files_in_queue if f[4] < file_status[4])
+            estimated_wait_time = sum(
+                f[3] for f in files_in_queue if f[4] < file_status[4]
+            )
             if file_status[2] < 100.0:
-                wait_time_str = str(datetime.timedelta(seconds=round(estimated_wait_time + file_status[3])))
+                wait_time_str = str(
+                    datetime.timedelta(
+                        seconds=round(estimated_wait_time + file_status[3])
+                    )
+                )
                 file_status[1] += wait_time_str
 
     if os.path.exists(error_path):
@@ -159,10 +166,14 @@ async def handle_upload(e: events.UploadEventArguments, user_id):
 
 
 def handle_reject(e: events.GenericEventArguments):
-    ui.notify("Ungültige Datei. Es können nur Audio/Video-Dateien unter 12GB transkribiert werden.")
+    ui.notify(
+        "Ungültige Datei. Es können nur Audio/Video-Dateien unter 12GB transkribiert werden."
+    )
 
 
-def handle_added(e: events.GenericEventArguments, user_id, upload_element, refresh_file_view):
+def handle_added(
+    e: events.GenericEventArguments, user_id, upload_element, refresh_file_view
+):
     """After a file was added, refresh the GUI."""
     upload_element.run_method("removeUploadedFiles")
     refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=False)
@@ -264,7 +275,9 @@ async def download_all(user_id):
         for file_status in user_storage[user_id]["file_list"]:
             if file_status[2] == 100.0:
                 prepare_download(file_status[0], user_id)
-                final_html = join(ROOT, "data", "out", user_id, file_status[0] + ".htmlfinal")
+                final_html = join(
+                    ROOT, "data", "out", user_id, file_status[0] + ".htmlfinal"
+                )
                 myzip.write(final_html, arcname=file_status[0] + ".html")
     ui.download(zip_file_path)
 
@@ -300,7 +313,9 @@ def listen(user_id, refresh_file_view):
                 start = float(parts[1])
                 file_name = "_".join(parts[2:])
                 progress = min(0.975, (time.time() - start) / estimated_time)
-                estimated_time_left = round(max(1, estimated_time - (time.time() - start)))
+                estimated_time_left = round(
+                    max(1, estimated_time - (time.time() - start))
+                )
 
                 in_file = join(ROOT, "data", "in", user_id, file_name)
                 if os.path.exists(in_file):
@@ -316,7 +331,9 @@ def listen(user_id, refresh_file_view):
                 refresh_file_view(
                     user_id=user_id,
                     refresh_queue=True,
-                    refresh_results=(user_storage[user_id].get("file_in_progress") != file_name),
+                    refresh_results=(
+                        user_storage[user_id].get("file_in_progress") != file_name
+                    ),
                 )
                 user_storage[user_id]["file_in_progress"] = file_name
                 return
@@ -327,13 +344,18 @@ def listen(user_id, refresh_file_view):
             user_storage[user_id]["file_in_progress"] = None
             refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=True)
         else:
-            refresh_file_view(user_id=user_id, refresh_queue=True, refresh_results=False)
+            refresh_file_view(
+                user_id=user_id, refresh_queue=True, refresh_results=False
+            )
 
     out_user_dir = join(ROOT, "data", "out", user_id)
     if os.path.exists(out_user_dir):
         for f in listdir(out_user_dir):
             if isfile(join(out_user_dir, f)) and f.endswith(".summary"):
-                os.rename(join(out_user_dir, f), join(out_user_dir, f).replace(".summary", ".htmlsummary"))
+                os.rename(
+                    join(out_user_dir, f),
+                    join(out_user_dir, f).replace(".summary", ".htmlsummary"),
+                )
                 refresh_file_view(user_id, False, True)
 
 
@@ -344,7 +366,9 @@ def update_hotwords(user_id):
 
 def update_language(user_id):
     if "language" in user_storage[user_id]:
-        app.storage.user[f"{user_id}_language"] = INVERTED_LANGUAGES[user_storage[user_id]["language"].value]
+        app.storage.user[f"{user_id}_language"] = INVERTED_LANGUAGES[
+            user_storage[user_id]["language"].value
+        ]
 
 
 @ui.page("/editor")
@@ -420,7 +444,8 @@ return content.slice({i * 500_000}, {(i + 1) * 500_000});
 
 async def download_summary(file_name, user_id):
     ui.download(
-        src=join(ROOT + "data/out/" + user_id, file_name + ".htmlsummary"), filename=file_name.split(".")[0] + ".html"
+        src=join(ROOT + "data/out/" + user_id, file_name + ".htmlsummary"),
+        filename=file_name.split(".")[0] + ".html",
     )
 
 
@@ -438,12 +463,21 @@ async def main_page():
 
     @ui.refreshable
     def display_queue(user_id):
-        for file_status in sorted(user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])):
-            if user_storage[user_id].get("updates") and user_storage[user_id]["updates"][0] == file_status[0]:
+        for file_status in sorted(
+            user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])
+        ):
+            if (
+                user_storage[user_id].get("updates")
+                and user_storage[user_id]["updates"][0] == file_status[0]
+            ):
                 file_status = user_storage[user_id]["updates"]
             if 0 <= file_status[2] < 100.0:
-                ui.markdown(f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}")
-                ui.linear_progress(value=file_status[2] / 100, show_value=False, size="10px").props("instant-feedback")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}"
+                )
+                ui.linear_progress(
+                    value=file_status[2] / 100, show_value=False, size="10px"
+                ).props("instant-feedback")
                 ui.separator()
 
     async def summarize(file_name, user_id):
@@ -463,23 +497,36 @@ async def main_page():
     @ui.refreshable
     def display_results(user_id):
         any_file_ready = False
-        for file_status in sorted(user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])):
-            if user_storage[user_id].get("updates") and user_storage[user_id]["updates"][0] == file_status[0]:
+        for file_status in sorted(
+            user_storage[user_id]["file_list"], key=lambda x: (x[2], -x[4], x[0])
+        ):
+            if (
+                user_storage[user_id].get("updates")
+                and user_storage[user_id]["updates"][0] == file_status[0]
+            ):
                 file_status = user_storage[user_id]["updates"]
             if file_status[2] >= 100.0:
-                ui.markdown(f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}</b>")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}</b>"
+                )
                 with ui.row():
                     ui.button(
                         "Editor herunterladen (Lokal)",
-                        on_click=partial(download_editor, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            download_editor, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "Editor öffnen (Server)",
-                        on_click=partial(open_editor, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            open_editor, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "SRT-Datei",
-                        on_click=partial(download_srt, file_name=file_status[0], user_id=user_id),
+                        on_click=partial(
+                            download_srt, file_name=file_status[0], user_id=user_id
+                        ),
                     ).props("no-caps")
                     ui.button(
                         "Datei entfernen",
@@ -492,27 +539,48 @@ async def main_page():
                         color="red-5",
                     ).props("no-caps")
                     any_file_ready = True
-                with ui.row():
-                    summary_create = ui.button(
-                        "Zusammenfassung erstellen",
-                        on_click=partial(summarize, file_name=file_status[0], user_id=user_id),
-                    ).props("no-caps")
-                    summary_create.disable()
-                    summary_download = ui.button(
-                        "Zusammenfassung herunterladen",
-                        on_click=partial(download_summary, file_name=file_status[0], user_id=user_id),
-                    ).props("no-caps")
-                    summary_download.disable()
+                if SUMMARIZATION:
+                    with ui.row():
+                        summary_create = ui.button(
+                            "Zusammenfassung erstellen",
+                            on_click=partial(
+                                summarize, file_name=file_status[0], user_id=user_id
+                            ),
+                        ).props("no-caps")
+                        summary_create.disable()
+                        summary_download = ui.button(
+                            "Zusammenfassung herunterladen",
+                            on_click=partial(
+                                download_summary,
+                                file_name=file_status[0],
+                                user_id=user_id,
+                            ),
+                        ).props("no-caps")
+                        summary_download.disable()
 
-                    if os.path.isfile(join(ROOT + "data/out", user_id, file_status[0] + ".htmlsummary")):
-                        summary_download.enable()
-                    if not os.path.isfile(join(ROOT + "data/out", user_id, file_status[0] + ".todosummary")):
-                        summary_create.enable()
-                    else:
-                        ui.label("in Bearbeitung")
+                        if os.path.isfile(
+                            join(
+                                ROOT + "data/out",
+                                user_id,
+                                file_status[0] + ".htmlsummary",
+                            )
+                        ):
+                            summary_download.enable()
+                        if not os.path.isfile(
+                            join(
+                                ROOT + "data/out",
+                                user_id,
+                                file_status[0] + ".todosummary",
+                            )
+                        ):
+                            summary_create.enable()
+                        else:
+                            ui.label("in Bearbeitung")
                 ui.separator()
             elif file_status[2] == -1:
-                ui.markdown(f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}")
+                ui.markdown(
+                    f"<b>{file_status[0].replace('_', BACKSLASHCHAR + '_')}:</b> {file_status[1]}"
+                )
                 ui.button(
                     "Datei entfernen",
                     on_click=partial(
@@ -557,8 +625,15 @@ async def main_page():
     read_files(user_id)
 
     with ui.column():
-        with ui.header(elevated=True).style("background-color: #0070b4;").props("fit=scale-down").classes("q-pa-xs-xs"):
-            ui.image(join(ROOT, "data", "banner.png")).style("height: 90px; width: 443px;")
+        with (
+            ui.header(elevated=True)
+            .style("background-color: #0070b4;")
+            .props("fit=scale-down")
+            .classes("q-pa-xs-xs")
+        ):
+            ui.image(join(ROOT, "data", "banner.png")).style(
+                "height: 90px; width: 443px;"
+            )
         with ui.row():
             with ui.column():
                 with ui.card().classes("border p-4"):
@@ -591,11 +666,20 @@ async def main_page():
                 ui.label("")
                 ui.timer(
                     2,
-                    partial(listen, user_id=user_id, refresh_file_view=refresh_file_view),
+                    partial(
+                        listen, user_id=user_id, refresh_file_view=refresh_file_view
+                    ),
                 )
+                language = "deutsch"
+                if (
+                    f"{user_id}_language" in app.storage.user
+                    and app.storage.user[f"{user_id}_language"] is not None
+                ):
+                    language = LANGUAGES[app.storage.user[f"{user_id}_language"]]
+
                 user_storage[user_id]["language"] = ui.select(
                     [LANGUAGES[key] for key in LANGUAGES],
-                    value="deutsch",
+                    value=language,
                     on_change=partial(update_language, user_id),
                     label="Gesprochene Sprache",
                 ).style("width: min(40vw, 400px)")
@@ -618,7 +702,9 @@ async def main_page():
                     .classes("w-full no-wrap")
                     .style("width: min(40vw, 400px)")
                 ):
-                    ui.label("Diese Prototyp-Applikation wurde vom Statistischen Amt Kanton Zürich entwickelt.")
+                    ui.label(
+                        "Diese Prototyp-Applikation wurde vom Statistischen Amt Kanton Zürich entwickelt."
+                    )
                 ui.button(
                     "Anleitung öffnen",
                     on_click=lambda: ui.open(help_page, new_tab=True),
