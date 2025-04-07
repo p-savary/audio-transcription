@@ -29,6 +29,6 @@ jobs:
           echo ${{ vars.LOCATION }}
           az container create \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --file ./config/gpu-deploy-aci.yaml \
+            --file gpu-deploy-aci.yaml \
             --location ${{ vars.LOCATION }}
         shell: bash
