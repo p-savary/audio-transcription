@@ -24,9 +24,9 @@ jobs:
         run: |
           set -x
           echo ${{ vars.RESOURCE_GROUP }}
-          echo ${{ env.LOCATION }}
+          echo ${{ vars.LOCATION }}
           az container create \
-            --resource-group rg-aistuff-shr-eus \
-            --file config/gpu-deploy-aci.yaml \
-            --location eastus \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --file ./config/gpu-deploy-aci.yaml \
+            --location ${{ vars.LOCATION }}
         shell: bash
