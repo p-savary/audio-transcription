@@ -11,7 +11,7 @@ properties:
           memoryInGB: 16.0
           gpu:
             count: 1
-            sku: K80
+            sku: V100
       ports:
       - port: 8080
   osType: Linux
