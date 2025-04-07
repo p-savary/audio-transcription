@@ -1,0 +1,18 @@
+apiVersion: '2021-09-01'
+name: audio-transcription-instance
+properties:
+  containers:
+  - name: audio-transcription-container
+    properties:
+      image: philoutron/audio-transcription:latest
+      resources:
+        requests:
+          cpu: 4.0
+          memoryInGB: 16.0
+          gpu:
+            count: 1
+            sku: K80
+      ports:
+      - port: 8080
+  osType: Linux
+  restartPolicy: OnFailure
