@@ -29,14 +29,6 @@ jobs:
           echo ${{ vars.LOCATION }}
           az container create \
             --resource-group ${{ vars.RESOURCE_GROUP }} \
-            --location ${{ vars.LOCATION }} \
-            --name audio-transcription-instance \
-            --image philoutron/audio-transcription:latest \
-            --cpu 4.0 \
-            --memory 16.0 \
-            --gpu-count 1 \
-            --gpu-sku K80 \
-            --ports 8080 \
-            --os-type Linux \
-            --restart-policy OnFailure
+            --file $GITHUB_WORKSPACE/.github/config/gpu-deploy-aci.yaml \
+            --location ${{ vars.LOCATION }}
         shell: bash
