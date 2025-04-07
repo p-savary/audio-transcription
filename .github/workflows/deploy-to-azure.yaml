@@ -23,6 +23,6 @@ jobs:
       - name: Create Azure Container Instance
         run: |
           az container create \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --resource-group $RESOURCE_GROUP \
             --file config/gpu-deploy-aci.yaml \
-            --location ${{ env.LOCATION }}
+            --location $LOCATION
