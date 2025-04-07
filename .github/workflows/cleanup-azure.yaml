@@ -16,6 +16,6 @@ jobs:
       - name: Clean up Azure Container Instance
         run: |
           az container delete \
-            --resource-group $RESOURCE_GROUP \
-            --name audio-transcription-instance \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --name audio-transcription-container \
             --yes
