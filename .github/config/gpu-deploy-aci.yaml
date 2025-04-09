@@ -9,9 +9,6 @@ properties:
         requests:
           cpu: 4.0
           memoryInGB: 16.0
-          gpu:
-            count: 1
-            sku: T4
       ports:
       - port: 8080
   osType: Linux
