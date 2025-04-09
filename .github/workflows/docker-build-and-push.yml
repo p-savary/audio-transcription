@@ -1,11 +1,7 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - '.github/**'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
