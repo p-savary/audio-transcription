@@ -31,6 +31,4 @@ jobs:
             --resource-group ${{ vars.RESOURCE_GROUP }} \
             --file $GITHUB_WORKSPACE/.github/config/gpu-deploy-aci.yaml \
             --location ${{ vars.LOCATION }}
-            --registry-password ${{ secrets.DOCKER_PASSWORD }} \
-            --registry-username ${{ secrets.DOCKER_USERNAME }} \
         shell: bash
