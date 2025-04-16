@@ -21,6 +21,8 @@ ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/
 
 WORKDIR /usr/src/app
 
+COPY requirements.txt ./requirements.txt
+
 RUN apt-get update
 RUN apt-get install ffmpeg wget -y
 
