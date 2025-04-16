@@ -26,6 +26,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./docker_aargau
+          context: .
           push: true
           tags: craistuff.azurecr.io/audio-transcription:latest
