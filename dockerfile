@@ -18,10 +18,10 @@
 FROM python:3.10
 
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib/x86_64-linux-gnu/
-
 WORKDIR /usr/src/app
 
 COPY requirements.txt ./requirements.txt
+COPY . .
 
 RUN apt-get update
 RUN apt-get install ffmpeg wget -y
@@ -41,5 +41,7 @@ RUN pip3 install --force-reinstall -v "numpy==1.26.3"
 
 RUN pip3 install ffprobe
 RUN pip3 install hapless
+
+EXPOSE 8080
 
 CMD [ "bash", "./bootup.sh" ]
